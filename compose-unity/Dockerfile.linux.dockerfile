@@ -11,18 +11,30 @@ WORKDIR /var/workspace
 # Base tools + locale
 ENV LANG=C.UTF-8
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    git \
-    git-lfs \
-    gnupg \
-    locales \
-    nano \
-    pciutils \
-    wget \
-    zip \
-    unzip \
-    xz-utils && \
+        ca-certificates \
+        curl \
+        git \
+        git-lfs \
+        gnupg \
+        locales \
+        nano \
+        pciutils \
+        wget \
+        zip \
+        unzip \
+        xz-utils \
+        libxfixes3 \
+        libxi6 \
+        libxxf86vm1 \
+        libxrender1 \
+        libxkbcommon0 \
+        libsm6 \
+        libice6 \
+        libgl1 \
+        libegl1 \
+        libdbus-1-3 \
+        libfontconfig1 \
+        libfreetype6 && \
     echo "$LANG UTF-8" > /etc/locale.gen && \
     locale-gen "$LANG" && \
     install -m 0755 -d /etc/apt/keyrings && \
