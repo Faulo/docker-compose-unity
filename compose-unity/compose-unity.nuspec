@@ -1,0 +1,22 @@
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>compose-unity</id>
+    <version>1.0.0</version>
+    <title>Slothsoft's Unity Image</title>
+    <authors>Daniel Schulz</authors>
+    <description>Slothsoft's Unity Image</description>
+    <dependencies>
+      <dependency id="zip" />
+      <dependency id="nano" />
+      <dependency id="curl" />
+      <dependency id="docker-cli" />
+      <dependency id="nodejs" />
+      <dependency id="butler" />
+      <dependency id="steamcmd" />
+      <dependency id="php" version="[8.2,8.3)" />
+      <dependency id="composer" />
+      <dependency id="dotnet-sdk" version="[9,10)" />
+      <dependency id="unity-hub" />
+    </dependencies>
+  </metadata>
+</package>

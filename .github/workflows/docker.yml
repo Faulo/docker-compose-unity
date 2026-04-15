@@ -49,7 +49,7 @@ jobs:
                   password: ${{ secrets.DOCKERHUB_TOKEN }}
             - name: Build ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
               working-directory: ${{matrix.image}}
-              run: docker build --isolation=hyperv . -t ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
+              run: docker build --isolation=hyperv . -f Dockerfile.${{matrix.os}}.dockerfile -t ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
             - name: Push ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
               run: docker image push ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
     docker-linux:
@@ -77,6 +77,7 @@ jobs:
                   tags: ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
                   platforms: ${{matrix.os}}/amd64
                   context: "{{defaultContext}}:${{matrix.image}}"
+                  file: Dockerfile.${{matrix.os}}.dockerfile
                   provenance: false
     merge:
         runs-on: ubuntu-24.04
@@ -86,7 +87,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                image: ["basic-agent", "ci-agent", "unity-agent"]
+                image: ["compose-unity"]
         steps:
             - name: Login to Docker Hub
               uses: docker/login-action@v4
