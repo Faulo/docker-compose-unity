@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     install -m 0755 -d /etc/apt/keyrings && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
-    git config --global --add safe.directory * \
+    git config --global --add safe.directory * && \
     curl --version
 
 # NodeJS 22
