@@ -20,11 +20,21 @@ RUN choco pack compose-unity.nuspec; \
     Remove-Item -Force *.nuspec; \
     Remove-Item -Force *.nupkg
 
+# Test
+RUN curl.exe --version; \
+    php --version; \
+    composer --version; \
+    butler --version; \
+    npm --version; \
+    dotnet --version; \
+    docker info; \
+    steamcmd +quit
+
 # Farah
 ENV COMPOSE_UNITY="composer -d C:\\unity"
 ENV COMPOSER_ALLOW_SUPERUSER="1"
 COPY unity/composer.json C:\\unity\\
 COPY unity/config C:\\unity\\config\\
 COPY unity/compose-unity.bat C:\\Windows\\
-RUN compose-unity update --no-dev; \
+RUN compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative; \
     compose-unity exec unity-build
