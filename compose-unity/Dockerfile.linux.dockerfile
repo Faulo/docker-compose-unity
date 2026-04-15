@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pciutils \
     wget \
     zip \
-    unzip && \
+    unzip \
     xz-utils && \
     echo "$LANG UTF-8" > /etc/locale.gen && \
     locale-gen "$LANG" && \
