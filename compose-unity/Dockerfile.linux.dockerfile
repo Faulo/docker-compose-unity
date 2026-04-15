@@ -13,6 +13,7 @@ ENV LANG=C.UTF-8
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    git \
     gnupg \
     locales \
     nano \
@@ -24,7 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     locale-gen "$LANG" && \
     install -m 0755 -d /etc/apt/keyrings && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \	
+    rm -rf /var/lib/apt/lists/* && \
+    git config --global --add safe.directory * \
     curl --version
 
 # NodeJS 22

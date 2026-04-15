@@ -24,7 +24,9 @@ COPY php.ini C:\\tools\\php82\\custom.ini
 RUN Get-Content C:\\tools\\php82\\custom.ini | Add-Content -Path C:\\tools\\php82\\php.ini
 
 # Test
-RUN curl.exe --version; \
+RUN git config --global --add safe.directory *; \
+    curl.exe --version; \
+    git --version; \    
     php --version; \
     composer --version; \
     butler --version; \
