@@ -30,8 +30,7 @@ RUN curl.exe --version; \
     butler --version; \
     npm --version; \
     dotnet --version; \
-    docker info; \
-    steamcmd +quit
+    docker --version
 
 # Farah
 ENV COMPOSE_UNITY="composer -d C:\\unity"
