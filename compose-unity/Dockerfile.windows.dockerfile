@@ -20,6 +20,9 @@ RUN choco pack compose-unity.nuspec; \
     Remove-Item -Force *.nuspec; \
     Remove-Item -Force *.nupkg
 
+COPY php.ini C:\\tools\\php82\\custom.ini
+RUN Get-Content C:\\tools\\php82\\custom.ini | Add-Content -Path C:\\tools\\php82\\php.ini
+
 # Test
 RUN curl.exe --version; \
     php --version; \
