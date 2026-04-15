@@ -1,0 +1,17 @@
+{
+	"name" : "slothsoft/unity-bridge",
+	"description" : "Bridge between Jenkins and building+testing Unity",
+	"type" : "metapackage",
+	"version" : "1.0.0",
+	"autoload" : {
+		"files" : [
+			"config/config.php"
+		]
+	},
+	"require" : {
+		"slothsoft/unity" : "^2.9"
+	},
+	"config" : {
+		"process-timeout" : 14400
+	}
+}

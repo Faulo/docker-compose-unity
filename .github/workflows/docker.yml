@@ -1,0 +1,102 @@
+name: Docker
+
+on:
+    push:
+        branches:
+            - "main"
+    schedule:
+        - cron: "0 0 1 * *"
+
+jobs:
+    docker-windows:
+        runs-on: windows-2022
+        strategy:
+            fail-fast: true
+            max-parallel: 1
+            matrix:
+                image: ["compose-unity"]
+                os: ["windows"]
+        steps:
+            - name: Ensure Docker is running
+              shell: pwsh
+              run: |
+                  $service = Get-Service docker -ErrorAction Stop
+                  if ($service.Status -ne 'Running') {
+                    Start-Service docker
+                  }
+
+                  $ready = $false
+                  1..24 | ForEach-Object {
+                    try {
+                      docker version
+                      $ready = $true
+                      return
+                    } catch {
+                      Start-Sleep -Seconds 5
+                    }
+                  }
+
+                  if (-not $ready) {
+                    Get-Service docker
+                    throw "Docker daemon not ready"
+                  }
+            - name: Checkout
+              uses: actions/checkout@v6
+            - name: Login to Docker Hub
+              uses: docker/login-action@v4
+              with:
+                  username: ${{ secrets.DOCKERHUB_USERNAME }}
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+            - name: Build ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
+              working-directory: ${{matrix.image}}
+              run: docker build --isolation=hyperv . -t ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
+            - name: Push ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
+              run: docker image push ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
+    docker-linux:
+        runs-on: ubuntu-24.04
+        strategy:
+            fail-fast: true
+            max-parallel: 1
+            matrix:
+                image: ["compose-unity"]
+                os: ["linux"]
+        steps:
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v4
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v4
+            - name: Login to Docker Hub
+              uses: docker/login-action@v4
+              with:
+                  username: ${{ secrets.DOCKERHUB_USERNAME }}
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+            - name: Build and push ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
+              uses: docker/build-push-action@v7
+              with:
+                  push: true
+                  tags: ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-${{matrix.os}}
+                  platforms: ${{matrix.os}}/amd64
+                  context: "{{defaultContext}}:${{matrix.image}}"
+                  provenance: false
+    merge:
+        runs-on: ubuntu-24.04
+        needs:
+            - docker-windows
+            - docker-linux
+        strategy:
+            fail-fast: false
+            matrix:
+                image: ["basic-agent", "ci-agent", "unity-agent"]
+        steps:
+            - name: Login to Docker Hub
+              uses: docker/login-action@v4
+              with:
+                  username: ${{ secrets.DOCKERHUB_USERNAME }}
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+            - name: Merge manifests
+              uses: Noelware/docker-manifest-action@v1
+              with:
+                  inputs: ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest
+                  tags: ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-linux, ${{secrets.DOCKERHUB_USERNAME}}/${{matrix.image}}:latest-windows
+                  push: true
+                  fallback: true
