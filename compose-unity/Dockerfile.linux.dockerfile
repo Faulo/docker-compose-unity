@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     zip \
     unzip && \
+    xz-utils && \
     echo "$LANG UTF-8" > /etc/locale.gen && \
     locale-gen "$LANG" && \
     install -m 0755 -d /etc/apt/keyrings && \
@@ -106,7 +107,8 @@ RUN apt-get update && \
     dotnet tool update -g docfx
 
 # Blender
-ARG BLENDER_VERSION=4.5.8
+ARG BLENDER_SERIES=4.5
+
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
     case "$arch" in \
@@ -114,12 +116,17 @@ RUN set -eux; \
       arm64) blender_arch="arm64" ;; \
       *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; \
     esac; \
-    major_minor="${BLENDER_VERSION%.*}"; \
-    url="https://download.blender.org/release/Blender${major_minor}/blender-${BLENDER_VERSION}-linux-${blender_arch}.tar.xz"; \
-    curl -fsSL "$url" -o /tmp/blender.tar.xz; \
+    base_url="https://download.blender.org/release/Blender${BLENDER_SERIES}/"; \
+    version="$(curl -fsSL "$base_url" \
+      | grep -oE "blender-${BLENDER_SERIES}\.[0-9]+-linux-${blender_arch}\.tar\.xz" \
+      | sed -E "s/^blender-([0-9]+\.[0-9]+\.[0-9]+)-linux-.*$/\1/" \
+      | sort -V \
+      | tail -n1)"; \
+    test -n "$version"; \
+    curl -fsSL "${base_url}blender-${version}-linux-${blender_arch}.tar.xz" -o /tmp/blender.tar.xz; \
     rm -rf /opt/blender-*; \
     tar -xJf /tmp/blender.tar.xz -C /opt; \
-    ln -sfn "/opt/blender-${BLENDER_VERSION}-linux-${blender_arch}/blender" /usr/local/bin/blender; \
+    ln -sfn "/opt/blender-${version}-linux-${blender_arch}/blender" /usr/local/bin/blender; \
     rm -f /tmp/blender.tar.xz; \
     blender --version
 
