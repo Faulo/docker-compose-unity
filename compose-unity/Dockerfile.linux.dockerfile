@@ -91,10 +91,6 @@ RUN apt-get update && \
 ENV COMPOSE_UNITY="composer -d /var/unity"
 ENV COMPOSER_ALLOW_SUPERUSER="1"
 
-ENV UNITY_LOGGING="stdin stdout stderr"
-ENV UNITY_ACCELERATOR_ENDPOINT=""
-ENV UNITY_NO_GRAPHICS="1"
-
 COPY --chmod=755 --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 COPY --chmod=755 unity/composer.json /var/unity/
 COPY --chmod=755 unity/config /var/unity/config/
