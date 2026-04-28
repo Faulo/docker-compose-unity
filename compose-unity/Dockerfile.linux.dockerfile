@@ -175,8 +175,8 @@ RUN install -m 0755 -d /etc/apt/keyrings && \
     rm -rf /var/lib/apt/lists/*
 
 # Unity 2021 OpenSSL compatibility
-RUN curl -fsSL http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb -o /tmp/libssl1.1.deb && \
-    dpkg -i /tmp/libssl1.1.deb && \
+RUN curl -fsSL https://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1w-0+deb11u5_amd64.deb -o /tmp/libssl1.1.deb && \
+    apt install -y /tmp/libssl1.1.deb && \
     rm /tmp/libssl1.1.deb
 
 # VNC Server
