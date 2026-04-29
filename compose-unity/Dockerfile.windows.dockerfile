@@ -12,8 +12,8 @@ RUN [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePoin
     iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 
 # Tools
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT="1"
-ENV DOTNET_CLI_UI_LANGUAGE="en"
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
+ENV DOTNET_CLI_UI_LANGUAGE=en
 COPY compose-unity.nuspec compose-unity.nuspec
 RUN choco pack compose-unity.nuspec; \
     choco install compose-unity --no-progress --yes --ignore-checksums --source '.;https://community.chocolatey.org/api/v2/'; \
