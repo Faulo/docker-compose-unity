@@ -10,6 +10,7 @@ WORKDIR /var/workspace
 
 # Base tools + locale
 ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
@@ -104,8 +105,8 @@ RUN compose-unity update --no-dev && \
 	compose-unity exec unity-build
 
 # .NET SDK
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT="1"
-ENV DOTNET_CLI_UI_LANGUAGE="en"
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+ENV DOTNET_CLI_UI_LANGUAGE=en
 ENV PATH="/root/.dotnet/tools:${PATH}"
 RUN curl -fsSL https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -o /tmp/packages-microsoft-prod.deb && \
     dpkg -i /tmp/packages-microsoft-prod.deb && \
