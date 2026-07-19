@@ -176,9 +176,13 @@ RUN install -m 0755 -d /etc/apt/keyrings && \
     rm -rf /var/lib/apt/lists/*
 
 # Unity 2021 OpenSSL compatibility
-RUN curl -fsSL https://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1w-0+deb11u5_amd64.deb -o /tmp/libssl1.1.deb && \
-    apt install -y /tmp/libssl1.1.deb && \
-    rm /tmp/libssl1.1.deb
+RUN echo "deb https://security.debian.org/debian-security bullseye-security main" \
+        > /etc/apt/sources.list.d/bullseye-security.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends libssl1.1 && \
+    rm /etc/apt/sources.list.d/bullseye-security.list && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # VNC Server
 ENV USER="root"
