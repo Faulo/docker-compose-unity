@@ -60,19 +60,10 @@ jobs:
               with:
                   username: ${{ secrets.DOCKERHUB_USERNAME }}
                   password: ${{ secrets.DOCKERHUB_TOKEN }}
-            - name: Pull previous ${{ matrix.os }} image for cache
-              shell: pwsh
-              run: |
-                  docker pull "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}"
-                  if ($LASTEXITCODE -ne 0) {
-                    Write-Host "No previous image is available; continuing without a warm cache."
-                    exit 0
-                  }
             - name: Build ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
               working-directory: ${{ matrix.image }}
               run: >-
                   docker build --isolation=hyperv
-                  --cache-from ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
                   --file Dockerfile.${{ matrix.os }}.dockerfile
                   --tag ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
                   .
