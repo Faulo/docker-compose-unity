@@ -194,7 +194,7 @@ COPY --chmod=755 unity/composer.json /var/unity/
 COPY --chmod=755 unity/config /var/unity/config/
 COPY --chmod=755 unity/compose-unity /usr/local/bin/
 
-RUN compose-unity update --no-dev \
+RUN compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative
 
 # Test
 RUN compose-unity exec unity-build && \
