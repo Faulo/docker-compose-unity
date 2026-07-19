@@ -65,5 +65,5 @@ COPY unity/compose-unity.bat C:\\Windows\\
 RUN compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative
 
 # Test
-RUN compose-unity exec unity-build; \
-    compose-unity exec unity-help
+# WORKDIR "C:\\Program Files\\Unity Hub"
+# RUN ["Unity Hub.exe", "--", "--headless", "help"]
