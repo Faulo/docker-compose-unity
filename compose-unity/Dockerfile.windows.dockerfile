@@ -26,7 +26,7 @@ ENV DOTNET_CLI_UI_LANGUAGE=en
 COPY compose-unity.nuspec compose-unity.nuspec
 RUN choco pack compose-unity.nuspec; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to pack compose-unity' }; \
-    choco install compose-unity --no-progress --yes --ignore-checksums --source '.;https://community.chocolatey.org/api/v2/'; \
+    choco install compose-unity --no-progress --yes --ignore-checksums --execution-timeout=7200 --source '.;https://community.chocolatey.org/api/v2/'; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to install compose-unity dependencies' }; \
     Remove-Item -Force *.nuspec; \
     Remove-Item -Force *.nupkg
