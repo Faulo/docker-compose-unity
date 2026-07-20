@@ -1,3 +1,5 @@
+FROM mcr.microsoft.com/windows:1809 AS windows-desktop
+
 FROM mcr.microsoft.com/dotnet/framework/runtime:4.8-windowsservercore-ltsc2019
 
 SHELL ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
@@ -6,6 +8,13 @@ WORKDIR C:\\unity
 
 # GPU support
 COPY system32/* C:\\Windows\\System32\\
+
+# The checked-in DLLs are from Windows 10 build 19041 and import entry points
+# unavailable on LTSC 2019. Replace them with the matching Desktop image files.
+COPY --from=windows-desktop C:\\Windows\\System32\\ddraw.dll C:\\Windows\\System32\\ddraw.dll
+COPY --from=windows-desktop C:\\Windows\\System32\\dsound.dll C:\\Windows\\System32\\dsound.dll
+COPY --from=windows-desktop C:\\Windows\\System32\\glu32.dll C:\\Windows\\System32\\glu32.dll
+COPY --from=windows-desktop C:\\Windows\\System32\\opengl32.dll C:\\Windows\\System32\\opengl32.dll
 
 # Chocolatey
 RUN [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
@@ -36,6 +45,24 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
     if ($installedVersion -ne $env:UNITY_HUB_VERSION) { throw "Unexpected Unity Hub version: $installedVersion" }; \
     Remove-Item -Force $installer
 
+# Windows containers cannot start Electron's sandboxed GPU process. Keep Unity's
+# documented CLI syntax externally and translate it before launching Hub.
+COPY unity-hub-launcher.cs C:\\unity\\unity-hub-launcher.cs
+RUN $compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'; \
+    $launcher = 'C:\unity\Unity Hub.exe'; \
+    $hub = 'C:\Program Files\Unity Hub\Unity Hub.exe'; \
+    & $compiler /nologo /optimize+ /target:exe "/out:$launcher" C:\unity\unity-hub-launcher.cs; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to compile the Unity Hub launcher' }; \
+    Move-Item -LiteralPath $hub -Destination 'C:\Program Files\Unity Hub\Unity Hub.real.exe'; \
+    Move-Item -LiteralPath $launcher -Destination $hub; \
+    Remove-Item -Force C:\unity\unity-hub-launcher.cs
+
+# Resume large Editor downloads after temporary CDN stalls.
+COPY patch-unity-hub.js C:\\unity\\patch-unity-hub.js
+RUN node C:\unity\patch-unity-hub.js; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to enable Unity Hub download retries' }; \
+    Remove-Item -Force C:\unity\patch-unity-hub.js
+
 COPY php.ini C:\\tools\\php82\\custom.ini
 RUN Get-Content C:\\tools\\php82\\custom.ini | Add-Content -Path C:\\tools\\php82\\php.ini
 
@@ -65,5 +92,5 @@ COPY unity/compose-unity.bat C:\\Windows\\
 RUN compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative
 
 # Test
-# WORKDIR "C:\\Program Files\\Unity Hub"
-# RUN ["Unity Hub.exe", "--", "--headless", "help"]
+WORKDIR "C:\\Program Files\\Unity Hub"
+RUN ["Unity Hub.exe", "--", "--headless", "help"]
