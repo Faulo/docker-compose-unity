@@ -5,6 +5,7 @@ set DOCKER_CONTEXT=dende
 for /f %%i in ('docker --context %DOCKER_CONTEXT% info --format "{{.OSType}}"') do SET DOCKER_OS=%%i
 pushd compose-unity
 call docker --context %DOCKER_CONTEXT% build -t tmp/%DOCKER_IMAGE%:latest . -f Dockerfile.%DOCKER_OS%.dockerfile
+set BUILD_EXIT_CODE=%ERRORLEVEL%
 popd
-endlocal
 pause
+endlocal & exit /b %BUILD_EXIT_CODE%

@@ -45,8 +45,18 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
     if ($actualHash -ne '0B8E6941A6A2A7C1DF68B16451E4CC7F8F633C6B5488B21A47860179FD5D8802') { \
         throw "Unity Hub installer checksum mismatch: $actualHash" \
     }; \
+    $extractRoot = 'C:\UnityHubSetup'; \
+    $sevenZip = 'C:\ProgramData\chocolatey\lib\7zip.portable\tools\7z.exe'; \
+    Remove-Item -LiteralPath $extractRoot -Recurse -Force -ErrorAction SilentlyContinue; \
+    $extractArgument = '-o' + $extractRoot; \
+    & $sevenZip x $installer $extractArgument -y | Out-Null; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to extract the Unity Hub installer' }; \
+    $appArchives = @(Get-ChildItem -LiteralPath $extractRoot -Filter 'app-64.7z' -Recurse); \
+    if ($appArchives.Count -ne 1) { throw "Expected one Unity Hub app archive, found $($appArchives.Count)" }; \
+    $appArchive = $appArchives[0].FullName; \
+    $uninstaller = (Get-ChildItem -LiteralPath $extractRoot -Filter 'Uninstall Unity Hub.exe' -Recurse | Select-Object -First 1).FullName; \
     $process = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru; \
-    $installerExited = $process.WaitForExit(300000); \
+    $installerExited = $process.WaitForExit(30000); \
     $needsExtraction = -not $installerExited; \
     if ($installerExited -and $process.ExitCode -ne 0) { $needsExtraction = $true }; \
     if (-not (Test-Path -LiteralPath $hubExecutable)) { $needsExtraction = $true }; \
@@ -56,19 +66,15 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
             if (-not $process.HasExited) { $process.Kill() }; \
             $process.WaitForExit() \
         }; \
-        $extractRoot = 'C:\UnityHubSetup'; \
         Remove-Item -LiteralPath $hubDirectory -Recurse -Force -ErrorAction SilentlyContinue; \
-        Remove-Item -LiteralPath $extractRoot -Recurse -Force -ErrorAction SilentlyContinue; \
-        7z.exe x $installer "-o$extractRoot" -y | Out-Null; \
-        if ($LASTEXITCODE -ne 0) { throw 'Failed to extract the Unity Hub installer' }; \
-        $appArchive = Join-Path $extractRoot '$PLUGINSDIR\app-64.7z'; \
-        7z.exe x $appArchive "-o$hubDirectory" -y | Out-Null; \
+        $hubExtractArgument = '-o' + $hubDirectory; \
+        & $sevenZip x $appArchive $hubExtractArgument -y | Out-Null; \
         if ($LASTEXITCODE -ne 0) { throw 'Failed to extract the Unity Hub application' }; \
-        Copy-Item -LiteralPath (Join-Path $extractRoot '$R0\Uninstall Unity Hub.exe') -Destination $hubDirectory; \
-        Remove-Item -LiteralPath $extractRoot -Recurse -Force \
+        Copy-Item -LiteralPath $uninstaller -Destination $hubDirectory \
     }; \
     $installedVersion = (Get-Item $hubExecutable).VersionInfo.FileVersion; \
     if ($installedVersion -ne $env:UNITY_HUB_VERSION) { throw "Unexpected Unity Hub version: $installedVersion" }; \
+    Remove-Item -LiteralPath $extractRoot -Recurse -Force; \
     Remove-Item -Force $installer
 
 # Windows containers cannot start Electron's sandboxed GPU process. Keep Unity's
