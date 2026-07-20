@@ -74,6 +74,9 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
     }; \
     $installedVersion = (Get-Item $hubExecutable).VersionInfo.FileVersion; \
     if ($installedVersion -ne $env:UNITY_HUB_VERSION) { throw "Unexpected Unity Hub version: $installedVersion" }; \
+    $hubRegistryKey = 'HKLM:\SOFTWARE\Unity Technologies\Hub'; \
+    New-Item -Path $hubRegistryKey -Force | Out-Null; \
+    New-ItemProperty -Path $hubRegistryKey -Name 'InstallLocation' -Value $hubDirectory -PropertyType String -Force | Out-Null; \
     Remove-Item -LiteralPath $extractRoot -Recurse -Force; \
     Remove-Item -Force $installer
 
