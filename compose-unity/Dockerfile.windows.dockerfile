@@ -31,10 +31,15 @@ RUN choco pack compose-unity.nuspec; \
     Remove-Item -Force *.nuspec; \
     Remove-Item -Force *.nupkg
 
-# Unity publishes the 3.12.1 installer under its 3.12.0 archive path.
+RUN choco install 7zip.portable --version=26.2.0 --no-progress --yes; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to install 7-Zip' }
+
+# Unity publishes the 3.12.1 installer under its 3.12.0 archive path. Its NSIS
+# process can hang on Server Core, so fall back to its verified app archive.
 ENV UNITY_HUB_VERSION=3.12.1
 RUN $installer = 'C:\UnityHubSetup.exe'; \
-    $hubExecutable = 'C:\Program Files\Unity Hub\Unity Hub.exe'; \
+    $hubDirectory = 'C:\Program Files\Unity Hub'; \
+    $hubExecutable = Join-Path $hubDirectory 'Unity Hub.exe'; \
     Invoke-WebRequest -Uri 'https://public-cdn.cloud.unity3d.com/hub/3.12.0/UnityHubSetup.exe' -OutFile $installer; \
     $actualHash = (Get-FileHash -Algorithm SHA256 $installer).Hash; \
     if ($actualHash -ne '0B8E6941A6A2A7C1DF68B16451E4CC7F8F633C6B5488B21A47860179FD5D8802') { \
@@ -42,11 +47,25 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
     }; \
     $process = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru; \
     $installerExited = $process.WaitForExit(300000); \
-    if (-not $installerExited) { \
-        if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; \
-        if (-not (Test-Path -LiteralPath $hubExecutable)) { throw 'Unity Hub installer timed out before installing Hub' } \
-    } elseif ($process.ExitCode -ne 0) { \
-        throw "Unity Hub installer failed with exit code $($process.ExitCode)" \
+    $needsExtraction = -not $installerExited; \
+    if ($installerExited -and $process.ExitCode -ne 0) { $needsExtraction = $true }; \
+    if (-not (Test-Path -LiteralPath $hubExecutable)) { $needsExtraction = $true }; \
+    if ($needsExtraction) { \
+        if (-not $process.HasExited) { \
+            taskkill.exe /PID $process.Id /T /F | Out-Null; \
+            if (-not $process.HasExited) { $process.Kill() }; \
+            $process.WaitForExit() \
+        }; \
+        $extractRoot = 'C:\UnityHubSetup'; \
+        Remove-Item -LiteralPath $hubDirectory -Recurse -Force -ErrorAction SilentlyContinue; \
+        Remove-Item -LiteralPath $extractRoot -Recurse -Force -ErrorAction SilentlyContinue; \
+        7z.exe x $installer "-o$extractRoot" -y | Out-Null; \
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to extract the Unity Hub installer' }; \
+        $appArchive = Join-Path $extractRoot '$PLUGINSDIR\app-64.7z'; \
+        7z.exe x $appArchive "-o$hubDirectory" -y | Out-Null; \
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to extract the Unity Hub application' }; \
+        Copy-Item -LiteralPath (Join-Path $extractRoot '$R0\Uninstall Unity Hub.exe') -Destination $hubDirectory; \
+        Remove-Item -LiteralPath $extractRoot -Recurse -Force \
     }; \
     $installedVersion = (Get-Item $hubExecutable).VersionInfo.FileVersion; \
     if ($installedVersion -ne $env:UNITY_HUB_VERSION) { throw "Unexpected Unity Hub version: $installedVersion" }; \
