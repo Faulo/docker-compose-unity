@@ -14,10 +14,10 @@
       <dependency id="nodejs" />
       <dependency id="butler" />
       <dependency id="steamcmd" />
-      <dependency id="vcredist140" version="[14.51.36231]" />
+      <dependency id="vcredist140" />
       <dependency id="php" version="[8.2,8.3)" />
       <dependency id="composer" />
-      <dependency id="dotnet-sdk" version="[9.0.314]" />
+      <dependency id="dotnet-9.0-sdk" />
     </dependencies>
   </metadata>
 </package>
