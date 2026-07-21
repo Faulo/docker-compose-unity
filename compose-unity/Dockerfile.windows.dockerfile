@@ -125,3 +125,5 @@ RUN compose-unity update --no-interaction --no-dev --optimize-autoloader --class
 # Test
 RUN compose-unity exec unity-build; \
     compose-unity exec unity-help
+
+VOLUME ["C:/Program Files/Unity/Hub/Editor", "C:/Users/ContainerAdministrator/AppData/Roaming/Unity", "C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub", "C:/Users/ContainerAdministrator/AppData/Local/Unity", "C:/ProgramData/Unity"]

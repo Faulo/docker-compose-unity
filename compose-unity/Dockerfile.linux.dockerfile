@@ -199,3 +199,5 @@ RUN compose-unity update --no-interaction --no-dev --optimize-autoloader --class
 # Test
 RUN compose-unity exec unity-build && \
     compose-unity exec unity-help
+
+VOLUME ["/root/Unity", "/root/.config/unity3d", "/root/.config/unityhub", "/root/.cache/Unity", "/root/.local/share/unity3d"]
