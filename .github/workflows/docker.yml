@@ -60,10 +60,14 @@ jobs:
               with:
                   username: ${{ secrets.DOCKERHUB_USERNAME }}
                   password: ${{ secrets.DOCKERHUB_TOKEN }}
+            - name: Restore Windows image cache
+              continue-on-error: true
+              run: docker image pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
             - name: Build ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
               working-directory: ${{ matrix.image }}
               run: >-
                   docker build --isolation=hyperv
+                  --cache-from ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
                   --file Dockerfile.${{ matrix.os }}.dockerfile
                   --tag ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
                   .
