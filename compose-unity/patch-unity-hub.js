@@ -42,6 +42,11 @@ replaceOnce(
     'Hub download options',
 );
 replaceOnce(
+    'return b(0<a.__downloaded?a.resume():a.__start())',
+    'return a.__opts.override=!0,b(a.__start())',
+    'Hub download retry behavior',
+);
+replaceOnce(
     'function installFromExe(e,r,t){return logger.debug("installFromExe"),new Promise(((o,n)=>{let i="/S";r&&""!==r&&(i=r);let a="";t&&(a=`/D=${t}`),logger.info(`install ${e} ${i} ${a}`),proc.exec(`"${e}" ${i} ${a}`,{name:"Unity installer"},((e,r)=>{e?n(e):r?n(r):o()}))}))}',
     'function installFromExe(e,r,t){return new Promise(((o,n)=>{let i=r||"/S",a=t?`/D=${t}`:"",s=30,c=()=>proc.exec(`"${e}" ${i} ${a}`,{name:"Unity installer"},((e,r)=>{e&&/another process/.test(e.message)&&s--?setTimeout(c,1000):e?n(e):r?n(r):o()}));setTimeout(c,1000)}))}',
     'Windows editor installer',
