@@ -7,10 +7,6 @@ SHELL ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell", "-NonIntera
 WORKDIR C:\\unity
 
 # GPU support
-COPY system32/* C:\\Windows\\System32\\
-
-# The checked-in DLLs are from Windows 10 build 19041 and import entry points
-# unavailable on LTSC 2019. Replace them with the matching Desktop image files.
 COPY --from=windows-desktop C:\\Windows\\System32\\ddraw.dll C:\\Windows\\System32\\ddraw.dll
 COPY --from=windows-desktop C:\\Windows\\System32\\dsound.dll C:\\Windows\\System32\\dsound.dll
 COPY --from=windows-desktop C:\\Windows\\System32\\glu32.dll C:\\Windows\\System32\\glu32.dll
