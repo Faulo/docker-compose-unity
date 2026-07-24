@@ -13,7 +13,7 @@ These short messages have special handling when they appear alone in a user mess
 
 ## Repository and Environment
 
-This repository builds Linux and Windows Docker images for running Unity and its supporting tools.
+This repository builds Linux and Windows variants of one Docker image.
 
 The host provides a `docker` client in its shell. Do not assume a particular host operating system, shell, or additional host tooling.
 
@@ -22,7 +22,7 @@ Two Docker contexts are available:
 - `linux` is the Linux container host.
 - `windows` is the Windows container host.
 
-Always pass `--context linux` or `--context windows` explicitly to every Docker command, including targeted builds, runs, inspections, and debugging commands. Never rely on the active or environment-selected Docker context.
+Agents must pass `--context linux` or `--context windows` explicitly to every Docker command, including targeted builds, runs, inspections, and debugging commands. Never rely on the active or environment-selected Docker context during agent automation.
 
 The root `.env` is the authoritative project configuration:
 
@@ -33,13 +33,29 @@ The root `.env` is the authoritative project configuration:
 
 Read these values using facilities available in the current shell. Decode surrounding dotenv quotes and escaped inner quotes before constructing commands. Do not print, commit, or embed the values of credentials forwarded by `DOCKER_TEST_ARGS`.
 
+Do not hardcode project-specific image names, test commands, run arguments, credential forwarding, or volume mounts in the reusable root batch scripts. Put that configuration in `.env`.
+
 Keep Linux and Windows behavior aligned where practical. When a change intentionally applies to only one image, state why and validate that target explicitly.
 
 Do not install persistent host dependencies to compensate for missing image dependencies. Dependencies required at build or runtime belong in the appropriate Dockerfile, package manifest, or embedded runtime configuration.
 
+## Batch Entry Points
+
+The root batch scripts are interactive entry points intended to be launched from Windows Explorer:
+
+- `docker-build-linux.bat` and `docker-build-windows.bat` delegate to `docker-build.bat`.
+- `docker-test-linux.bat` and `docker-test-windows.bat` delegate to `docker-test.bat`.
+- The shared scripts accept an optional first argument that serves as both Docker context and container OS.
+- With no argument, the shared scripts omit `--context` and detect the active daemon's container OS.
+- The shared scripts pause before closing so their output remains visible.
+
+For agent automation, construct Docker commands directly instead of invoking a pausing batch entry point.
+
 ## Build and Validation
 
-Construct Docker commands directly. Use these full build templates from the repository root:
+In the templates below, `{IMAGE}` means `tmp/{DOCKER_IMAGE}:latest`. Replace every `{...}` placeholder with the decoded value from `.env` before execution.
+
+Use these full build templates from the repository root:
 
 ```text
 docker --context linux build --tag {IMAGE} --file {DOCKER_IMAGE}/Dockerfile.linux.dockerfile {DOCKER_IMAGE}
@@ -69,7 +85,7 @@ Run the standard Windows container tests with:
 docker --context windows run --rm {DOCKER_TEST_ARGS} {DOCKER_TEST_ARGS_WINDOWS} {IMAGE} {DOCKER_TEST_CMD}
 ```
 
-Replace all `{...}` placeholders before executing a command. For targeted execution, keep the same explicit context and image but replace the container command with the smallest relevant probe. Prefer separate `docker run` invocations over host-specific compound-command quoting. Forward only the environment variables required by that probe.
+For targeted execution, keep the same explicit context and image but replace the container command with the smallest relevant probe. Prefer separate `docker run` invocations over host-specific compound-command quoting. Forward only the environment variables required by that probe.
 
 A normal validation consists of building the image for the affected context and running the relevant container tests. Changes to shared behavior require both Linux and Windows validation when both hosts are available.
 
@@ -82,10 +98,10 @@ When changing:
 - Base images, package repositories, or pinned tools: confirm that the referenced image, package, archive, and architecture exist.
 - Windows installation logic: preserve PowerShell's stop-on-error behavior and check native process exit codes where PowerShell would not do so automatically.
 - Linux installation logic: retain cache cleanup in the same layer and use non-interactive package installation.
-- `compose-unity` launchers or embedded runtime configuration: validate the command inside both affected image variants.
-- Unity Hub patches or launcher code: validate the patched/compiled artifact during the image build and run the relevant container smoke test.
+- Cross-platform launchers or embedded runtime configuration: validate the command inside both affected image variants.
+- Patches or compiled launcher code: validate the generated artifact during the image build and run the relevant container smoke test.
 
-Do not modify `machine-id`, credential forwarding, published volumes, or Unity licensing paths casually; they affect persisted licensing and CI behavior.
+Do not modify credential forwarding or configured volume mounts casually; they may affect persisted state and CI behavior.
 
 ## Git
 
