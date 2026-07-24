@@ -13,7 +13,8 @@ COPY --from=windows-desktop C:/Windows/System32/glu32.dll C:/Windows/System32/gl
 COPY --from=windows-desktop C:/Windows/System32/opengl32.dll C:/Windows/System32/opengl32.dll
 
 # Chocolatey
-RUN [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
+# Parentheses disambiguate PowerShell's type expression from Docker's exec form.
+RUN ([System.Net.ServicePointManager]::SecurityProtocol) = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
     iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 
 # Tools
@@ -118,6 +119,9 @@ RUN node C:\unity\patch-unity-hub.js; \
 
 COPY php.ini C:/tools/php82/custom.ini
 RUN Get-Content C:/tools/php82/custom.ini | Add-Content -Path C:/tools/php82/php.ini
+
+# Blender's FFmpeg libraries require the desktop video capture API.
+COPY --from=windows-desktop C:/Windows/System32/avicap32.dll C:/Windows/System32/avicap32.dll
 
 RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender 4.5'; \
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
