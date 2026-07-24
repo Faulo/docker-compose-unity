@@ -7,11 +7,7 @@ SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell", "-NonInteractive
 WORKDIR C:/unity
 
 # GPU support
-COPY --from=windows-desktop C:/Windows/System32/ddraw.dll C:/Windows/System32/ddraw.dll
-COPY --from=windows-desktop C:/Windows/System32/dsound.dll C:/Windows/System32/dsound.dll
-COPY --from=windows-desktop C:/Windows/System32/glu32.dll C:/Windows/System32/glu32.dll
-COPY --from=windows-desktop C:/Windows/System32/opengl32.dll C:/Windows/System32/opengl32.dll
-COPY --from=windows-desktop C:/Windows/System32/avicap32.dll C:/Windows/System32/avicap32.dll
+COPY --from=windows-desktop ["C:/Windows/System32/ddraw.dll", "C:/Windows/System32/dsound.dll", "C:/Windows/System32/glu32.dll", "C:/Windows/System32/opengl32.dll", "C:/Windows/System32/avicap32.dll", "C:/Windows/System32/"]
 
 # Chocolatey
 # Parentheses disambiguate PowerShell's type expression from Docker's exec form.
