@@ -68,7 +68,7 @@ RUN dpkg --add-architecture i386 && \
     ln -sf /usr/local/bin/steamcmd.sh /usr/local/bin/steamcmd && \
     rm -f /tmp/steamcmd.tar.gz && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \	
+    rm -rf /var/lib/apt/lists/* && \
     steamcmd +quit
 
 # PHP

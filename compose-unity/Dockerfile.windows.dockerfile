@@ -2,15 +2,15 @@ FROM mcr.microsoft.com/windows:1809 AS windows-desktop
 
 FROM mcr.microsoft.com/dotnet/framework/runtime:4.8-windowsservercore-ltsc2019
 
-SHELL ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
-WORKDIR C:\\unity
+WORKDIR C:/unity
 
 # GPU support
-COPY --from=windows-desktop C:\\Windows\\System32\\ddraw.dll C:\\Windows\\System32\\ddraw.dll
-COPY --from=windows-desktop C:\\Windows\\System32\\dsound.dll C:\\Windows\\System32\\dsound.dll
-COPY --from=windows-desktop C:\\Windows\\System32\\glu32.dll C:\\Windows\\System32\\glu32.dll
-COPY --from=windows-desktop C:\\Windows\\System32\\opengl32.dll C:\\Windows\\System32\\opengl32.dll
+COPY --from=windows-desktop C:/Windows/System32/ddraw.dll C:/Windows/System32/ddraw.dll
+COPY --from=windows-desktop C:/Windows/System32/dsound.dll C:/Windows/System32/dsound.dll
+COPY --from=windows-desktop C:/Windows/System32/glu32.dll C:/Windows/System32/glu32.dll
+COPY --from=windows-desktop C:/Windows/System32/opengl32.dll C:/Windows/System32/opengl32.dll
 
 # Chocolatey
 RUN [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
@@ -78,7 +78,7 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
 
 # Windows containers cannot start Electron's sandboxed GPU process. Keep Unity's
 # documented CLI syntax externally and translate it before launching Hub.
-COPY unity-hub-launcher.cs C:\\unity\\unity-hub-launcher.cs
+COPY unity-hub-launcher.cs C:/unity/unity-hub-launcher.cs
 RUN $compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'; \
     $launcher = 'C:\unity\Unity Hub.exe'; \
     $hub = 'C:\Program Files\Unity Hub\Unity Hub.exe'; \
@@ -89,18 +89,18 @@ RUN $compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'; \
     Remove-Item -Force C:\unity\unity-hub-launcher.cs
 
 # Resume large Editor downloads after temporary CDN stalls.
-COPY patch-unity-hub.js C:\\unity\\patch-unity-hub.js
+COPY patch-unity-hub.js C:/unity/patch-unity-hub.js
 RUN node C:\unity\patch-unity-hub.js; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to enable Unity Hub download retries' }; \
     Remove-Item -Force C:\unity\patch-unity-hub.js
 
-COPY php.ini C:\\tools\\php82\\custom.ini
-RUN Get-Content C:\\tools\\php82\\custom.ini | Add-Content -Path C:\\tools\\php82\\php.ini
+COPY php.ini C:/tools/php82/custom.ini
+RUN Get-Content C:/tools/php82/custom.ini | Add-Content -Path C:/tools/php82/php.ini
 
 # Test
 RUN git config --global --add safe.directory *; \
     curl.exe --version; \
-    git --version; \    
+    git --version; \
     php --version; \
     composer --version; \
     butler --version; \
@@ -109,16 +109,21 @@ RUN git config --global --add safe.directory *; \
     docker --version
 
 # Farah
-ENV COMPOSE_UNITY="composer -d C:\\unity"
+ENV COMPOSE_UNITY="composer -d C:/unity"
 ENV COMPOSER_ALLOW_SUPERUSER="1"
 
 ENV UNITY_LOGGING="stdin stdout stderr"
 ENV UNITY_ACCELERATOR_ENDPOINT=""
 ENV UNITY_NO_GRAPHICS="1"
 
-COPY unity/composer.json C:\\unity\\
-COPY unity/config C:\\unity\\config\\
-COPY unity/compose-unity.bat C:\\Windows\\
+COPY unity/composer.json C:/unity/
+COPY unity/config C:/unity/config/
+COPY unity/compose-unity-launcher.cs C:/unity/compose-unity-launcher.cs
+
+RUN $compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'; \
+    & $compiler /nologo /optimize+ /target:exe /out:C:\Windows\compose-unity.exe C:\unity\compose-unity-launcher.cs; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to compile the compose-unity launcher' }; \
+    Remove-Item -Force C:\unity\compose-unity-launcher.cs
 
 RUN compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative
 
