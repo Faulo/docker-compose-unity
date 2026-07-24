@@ -18,6 +18,15 @@ Both image variants provide:
 
 The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image includes the .NET Framework 4.7.1 Developer Pack, Windows GPU compatibility libraries, and native launchers for `compose-unity` and Unity Hub.
 
+## Repository Layout
+
+Build inputs are organized by ownership:
+
+- `linux/` contains the self-contained Linux build context, Dockerfile, launcher, and machine identity.
+- `windows/` contains the self-contained Windows build context, Dockerfile, launchers, Hub patch, Chocolatey package, and PHP extension configuration.
+
+Each Docker build uses its platform directory as the build context. Both images create their Composer project during the build, require `slothsoft/unity`, and configure the process timeout from `UNITY_TIMEOUT`.
+
 ## Docker Contexts
 
 The local development setup uses two explicitly named Docker contexts:
@@ -46,7 +55,7 @@ DOCKER_TEST_ARGS_WINDOWS="-v \"unity-binaries:C:/Program Files/Unity/Hub/Editor\
 DOCKER_TEST_CMD="compose-unity exec unity-empty-project test 2021.3.45f1"
 ```
 
-`DOCKER_IMAGE` names both the build directory and the image. Scripts tag the result as `tmp/compose-unity:latest`.
+`DOCKER_IMAGE` names the image. Scripts tag the result as `tmp/compose-unity:latest`.
 
 The test configuration:
 
@@ -83,13 +92,13 @@ Calling `docker-build.bat` or `docker-test.bat` without an argument omits `--con
 The Linux build script resolves to:
 
 ```text
-docker --context linux build --tag tmp/compose-unity:latest --file compose-unity/Dockerfile.linux.dockerfile compose-unity
+docker --context linux build --tag tmp/compose-unity:latest --file linux/Dockerfile linux
 ```
 
 The Windows build script resolves to:
 
 ```text
-docker --context windows build --tag tmp/compose-unity:latest --file compose-unity/Dockerfile.windows.dockerfile compose-unity
+docker --context windows build --tag tmp/compose-unity:latest --file windows/Dockerfile windows
 ```
 
 The Linux test script reconstructs:
@@ -115,7 +124,7 @@ The named `unity-binaries` volume persists downloaded Unity editors:
 
 The Dockerfiles also declare Unity, Unity Hub, cache, configuration, and licensing directories as volumes. The Linux image includes VNC tooling for interactive licensing setup.
 
-`compose-unity/machine-id` supplies a stable Linux machine identity used by the image. Changes to that file, credential forwarding, editor paths, or licensing volumes can invalidate persisted licensing and should be made deliberately.
+`linux/machine-id` supplies a stable Linux machine identity used by the image. Changes to that file, credential forwarding, editor paths, or licensing volumes can invalidate persisted licensing and should be made deliberately.
 
 ## Cross-Platform Command
 
@@ -125,6 +134,6 @@ Both images expose the same `compose-unity` command:
 compose-unity exec unity-empty-project test 2021.3.45f1
 ```
 
-Linux installs a shell launcher. Windows compiles `compose-unity/unity/compose-unity-launcher.cs` into `C:/Windows/compose-unity.exe`, which invokes Composer without requiring `cmd /C`.
+Linux installs `linux/compose-unity` as a shell launcher. Windows compiles `windows/compose-unity.cs` into `C:/Windows/compose-unity.exe`, which invokes Composer without requiring `cmd /C`.
 
 The Windows image also compiles a Unity Hub launcher that adapts headless command-line arguments for Windows containers and applies download retry handling during the image build.

@@ -23,13 +23,13 @@ if not defined DOCKER_OS (
     goto build_done
 )
 
-if not exist "%DOCKER_IMAGE%\Dockerfile.%DOCKER_OS%.dockerfile" (
-    echo Missing Dockerfile: %DOCKER_IMAGE%\Dockerfile.%DOCKER_OS%.dockerfile
+if not exist "%DOCKER_OS%\Dockerfile" (
+    echo Missing Dockerfile: %DOCKER_OS%\Dockerfile
     goto build_done
 )
 
-pushd "%DOCKER_IMAGE%"
-docker %DOCKER_CONTEXT_ARGS% build --tag tmp/%DOCKER_IMAGE%:latest --file Dockerfile.%DOCKER_OS%.dockerfile .
+pushd "%DOCKER_OS%"
+docker %DOCKER_CONTEXT_ARGS% build --tag tmp/%DOCKER_IMAGE%:latest --file Dockerfile .
 set "BUILD_EXIT_CODE=%ERRORLEVEL%"
 popd
 

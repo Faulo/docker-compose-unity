@@ -13,7 +13,7 @@ These short messages have special handling when they appear alone in a user mess
 
 ## Repository and Environment
 
-This repository builds Linux and Windows variants of one Docker image.
+This repository builds Linux and Windows variants of one Docker image. Each platform is self-contained: Linux build inputs live in `linux/`, and Windows build inputs live in `windows/`.
 
 The host provides a `docker` client in its shell. Do not assume a particular host operating system, shell, or additional host tooling.
 
@@ -26,7 +26,7 @@ Agents must pass `--context linux` or `--context windows` explicitly to every Do
 
 The root `.env` is the authoritative project configuration:
 
-- `DOCKER_IMAGE` names the build directory and image. The local image tag is `tmp/{DOCKER_IMAGE}:latest`.
+- `DOCKER_IMAGE` names the image. The local image tag is `tmp/{DOCKER_IMAGE}:latest`.
 - `DOCKER_TEST_ARGS` supplies shared project-specific `docker run` options.
 - `DOCKER_TEST_ARGS_LINUX` and `DOCKER_TEST_ARGS_WINDOWS` supply container-OS-specific `docker run` options such as volume paths.
 - `DOCKER_TEST_CMD` supplies the single command used to test the image.
@@ -58,8 +58,8 @@ In the templates below, `{IMAGE}` means `tmp/{DOCKER_IMAGE}:latest`. Replace eve
 Use these full build templates from the repository root:
 
 ```text
-docker --context linux build --tag {IMAGE} --file {DOCKER_IMAGE}/Dockerfile.linux.dockerfile {DOCKER_IMAGE}
-docker --context windows build --tag {IMAGE} --file {DOCKER_IMAGE}/Dockerfile.windows.dockerfile {DOCKER_IMAGE}
+docker --context linux build --tag {IMAGE} --file linux/Dockerfile linux
+docker --context windows build --tag {IMAGE} --file windows/Dockerfile windows
 ```
 
 For a targeted build, add Docker options such as `--target`, `--build-arg`, `--no-cache`, or `--progress plain` to the matching command, but retain its explicit context, Dockerfile, tag, and build context.

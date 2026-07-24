@@ -11,6 +11,7 @@ COPY --from=windows-desktop C:/Windows/System32/ddraw.dll C:/Windows/System32/dd
 COPY --from=windows-desktop C:/Windows/System32/dsound.dll C:/Windows/System32/dsound.dll
 COPY --from=windows-desktop C:/Windows/System32/glu32.dll C:/Windows/System32/glu32.dll
 COPY --from=windows-desktop C:/Windows/System32/opengl32.dll C:/Windows/System32/opengl32.dll
+COPY --from=windows-desktop C:/Windows/System32/avicap32.dll C:/Windows/System32/avicap32.dll
 
 # Chocolatey
 # Parentheses disambiguate PowerShell's type expression from Docker's exec form.
@@ -101,15 +102,15 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
 
 # Windows containers cannot start Electron's sandboxed GPU process. Keep Unity's
 # documented CLI syntax externally and translate it before launching Hub.
-COPY unity-hub-launcher.cs C:/unity/unity-hub-launcher.cs
+COPY "Unity Hub.cs" C:/unity/
 RUN $compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'; \
-    $launcher = 'C:\unity\Unity Hub.exe'; \
+    $source = 'C:\unity\Unity Hub.cs'; \
     $hub = 'C:\Program Files\Unity Hub\Unity Hub.exe'; \
-    & $compiler /nologo /optimize+ /target:exe "/out:$launcher" C:\unity\unity-hub-launcher.cs; \
+    $realHub = 'C:\Program Files\Unity Hub\Unity Hub.real.exe'; \
+    Move-Item -LiteralPath $hub -Destination $realHub; \
+    & $compiler /nologo /optimize+ /target:exe "/out:$hub" $source; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to compile the Unity Hub launcher' }; \
-    Move-Item -LiteralPath $hub -Destination 'C:\Program Files\Unity Hub\Unity Hub.real.exe'; \
-    Move-Item -LiteralPath $launcher -Destination $hub; \
-    Remove-Item -Force C:\unity\unity-hub-launcher.cs
+    Remove-Item -Force $source
 
 # Resume large Editor downloads after temporary CDN stalls.
 COPY patch-unity-hub.js C:/unity/patch-unity-hub.js
@@ -117,11 +118,8 @@ RUN node C:\unity\patch-unity-hub.js; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to enable Unity Hub download retries' }; \
     Remove-Item -Force C:\unity\patch-unity-hub.js
 
-COPY php.ini C:/tools/php82/custom.ini
-RUN Get-Content C:/tools/php82/custom.ini | Add-Content -Path C:/tools/php82/php.ini
-
-# Blender's FFmpeg libraries require the desktop video capture API.
-COPY --from=windows-desktop C:/Windows/System32/avicap32.dll C:/Windows/System32/avicap32.dll
+COPY php-extensions.ini C:/tools/php82/compose-unity-extensions.ini
+RUN Get-Content C:/tools/php82/compose-unity-extensions.ini | Add-Content -Path C:/tools/php82/php.ini
 
 RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender 4.5'; \
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
@@ -129,15 +127,25 @@ RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender 4.5'; \
 
 # Test
 RUN git config --global --add safe.directory *; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to configure Git safe directories' }; \
     curl.exe --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'curl smoke check failed' }; \
     git --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Git smoke check failed' }; \
     php --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'PHP smoke check failed' }; \
     composer --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Composer smoke check failed' }; \
     blender --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Blender smoke check failed' }; \
     butler --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Butler smoke check failed' }; \
     npm --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'npm smoke check failed' }; \
     dotnet --version; \
-    docker --version
+    if ($LASTEXITCODE -ne 0) { throw '.NET smoke check failed' }; \
+    docker --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Docker smoke check failed' }
 
 # Farah
 ENV COMPOSE_UNITY="composer -d C:/unity"
@@ -147,19 +155,27 @@ ENV UNITY_LOGGING="stdin stdout stderr"
 ENV UNITY_ACCELERATOR_ENDPOINT=""
 ENV UNITY_NO_GRAPHICS="1"
 
-COPY unity/composer.json C:/unity/
-COPY unity/config C:/unity/config/
-COPY unity/compose-unity-launcher.cs C:/unity/compose-unity-launcher.cs
+COPY compose-unity.cs C:/unity/
 
 RUN $compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'; \
-    & $compiler /nologo /optimize+ /target:exe /out:C:\Windows\compose-unity.exe C:\unity\compose-unity-launcher.cs; \
+    $source = 'C:\unity\compose-unity.cs'; \
+    $target = 'C:\Windows\compose-unity.exe'; \
+    & $compiler /nologo /optimize+ /target:exe "/out:$target" $source; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to compile the compose-unity launcher' }; \
-    Remove-Item -Force C:\unity\compose-unity-launcher.cs
+    Remove-Item -Force $source
 
-RUN compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative
+ARG UNITY_TIMEOUT="14400"
+RUN compose-unity require slothsoft/unity; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to require slothsoft/unity' }; \
+    compose-unity config process-timeout $env:UNITY_TIMEOUT; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to configure the Composer process timeout' }; \
+    compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to update compose-unity dependencies' }
 
 # Test
 RUN compose-unity exec unity-build; \
-    compose-unity exec unity-help
+    if ($LASTEXITCODE -ne 0) { throw 'compose-unity unity-build smoke check failed' }; \
+    compose-unity exec unity-help; \
+    if ($LASTEXITCODE -ne 0) { throw 'compose-unity unity-help smoke check failed' }
 
 VOLUME ["C:/Program Files/Unity/Hub/Editor", "C:/Users/ContainerAdministrator/AppData/Roaming/Unity", "C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub", "C:/Users/ContainerAdministrator/AppData/Local/Unity", "C:/ProgramData/Unity"]

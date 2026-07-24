@@ -83,6 +83,7 @@ RUN apt-get update && \
         php-mbstring \
         php-sockets \
         php-xml \
+        php-xsl \
         php-zip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
@@ -190,11 +191,13 @@ ENV UNITY_ACCELERATOR_ENDPOINT=""
 ENV UNITY_NO_GRAPHICS="1"
 
 COPY --chmod=755 --from=composer:2 /usr/bin/composer /usr/local/bin/composer
-COPY --chmod=755 unity/composer.json /var/unity/
-COPY --chmod=755 unity/config /var/unity/config/
-COPY --chmod=755 unity/compose-unity /usr/local/bin/
+COPY --chmod=755 compose-unity /usr/local/bin/
 
-RUN compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative
+ARG UNITY_TIMEOUT="14400"
+RUN install -m 0755 -d /var/unity && \
+    compose-unity require slothsoft/unity && \
+    compose-unity config process-timeout "$UNITY_TIMEOUT" && \
+    compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative
 
 # Test
 RUN compose-unity exec unity-build && \
