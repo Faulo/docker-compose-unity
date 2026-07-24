@@ -1,2 +1,2 @@
-FOR /F "tokens=*" %%i IN ('type .env') DO SET %%i
-FOR /F "tokens=*" %%i IN ('docker info --format {{.OSType}}') DO SET DOCKER_OS_TYPE=%%i
+@echo off
+for /f "usebackq tokens=*" %%i in ("%~dp0.env") do set %%i
