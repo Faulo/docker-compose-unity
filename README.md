@@ -16,7 +16,7 @@ Both image variants provide:
 - A .NET SDK.
 - Git, curl, and archive utilities.
 
-The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image includes Windows GPU compatibility libraries plus native launchers for `compose-unity` and Unity Hub.
+The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image includes the .NET Framework 4.7.1 Developer Pack, Windows GPU compatibility libraries, and native launchers for `compose-unity` and Unity Hub.
 
 ## Docker Contexts
 

@@ -30,6 +30,28 @@ RUN choco pack compose-unity.nuspec; \
 RUN choco install 7zip.portable --version=26.2.0 --no-progress --yes; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to install 7-Zip' }
 
+# Unity-generated projects can target .NET Framework 4.7.1 even when a newer
+# runtime is installed. Install Microsoft's reference assemblies for MSBuild.
+RUN $installer = 'C:\ndp471-devpack-enu.exe'; \
+    Invoke-WebRequest -Uri 'https://download.visualstudio.microsoft.com/download/pr/e5eb8d37-5bbd-4fb7-a71d-b749e010ef9f/601437d729667ecd29020a829fbc4881/ndp471-devpack-enu.exe' -OutFile $installer; \
+    $actualHash = (Get-FileHash -Algorithm SHA256 $installer).Hash; \
+    if ($actualHash -ne 'A70B790DCF7EE4A0CAE65FB82A16FB67FE970EB21B9424C9DA35E1ACAFBC4348') { \
+        throw ".NET Framework 4.7.1 Developer Pack checksum mismatch: $actualHash" \
+    }; \
+    $process = Start-Process -FilePath $installer -ArgumentList '/quiet', '/norestart' -PassThru; \
+    if (-not $process.WaitForExit(1200000)) { \
+        taskkill.exe /PID $process.Id /T /F | Out-Null; \
+        throw '.NET Framework 4.7.1 Developer Pack installer timed out' \
+    }; \
+    if ($process.ExitCode -notin @(0, 1641, 3010)) { \
+        throw ".NET Framework 4.7.1 Developer Pack installer failed with exit code $($process.ExitCode)" \
+    }; \
+    $referenceAssembly = 'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.7.1\mscorlib.dll'; \
+    if (-not (Test-Path -LiteralPath $referenceAssembly)) { \
+        throw '.NET Framework 4.7.1 reference assemblies were not installed' \
+    }; \
+    Remove-Item -LiteralPath $installer -Force
+
 # Unity publishes the 3.12.1 installer under its 3.12.0 archive path. Its NSIS
 # process can hang on Server Core, so fall back to its verified app archive.
 ENV UNITY_HUB_VERSION=3.12.1
