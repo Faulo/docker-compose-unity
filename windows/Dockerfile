@@ -100,18 +100,6 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
     Remove-Item -LiteralPath $extractRoot -Recurse -Force; \
     Remove-Item -Force $installer
 
-# Windows containers cannot start Electron's sandboxed GPU process. Keep Unity's
-# documented CLI syntax externally and translate it before launching Hub.
-COPY "Unity Hub.cs" C:/unity/
-RUN $compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'; \
-    $source = 'C:\unity\Unity Hub.cs'; \
-    $hub = 'C:\Program Files\Unity Hub\Unity Hub.exe'; \
-    $realHub = 'C:\Program Files\Unity Hub\Unity Hub.real.exe'; \
-    Move-Item -LiteralPath $hub -Destination $realHub; \
-    & $compiler /nologo /optimize+ /target:exe "/out:$hub" $source; \
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to compile the Unity Hub launcher' }; \
-    Remove-Item -Force $source
-
 # Resume large Editor downloads after temporary CDN stalls.
 COPY patch-unity-hub.js C:/unity/patch-unity-hub.js
 RUN node C:\unity\patch-unity-hub.js; \
@@ -155,14 +143,45 @@ ENV UNITY_LOGGING="stdin stdout stderr"
 ENV UNITY_ACCELERATOR_ENDPOINT=""
 ENV UNITY_NO_GRAPHICS="1"
 
-COPY compose-unity.cs C:/unity/
-
-RUN $compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'; \
-    $source = 'C:\unity\compose-unity.cs'; \
-    $target = 'C:\Windows\compose-unity.exe'; \
-    & $compiler /nologo /optimize+ /target:exe "/out:$target" $source; \
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to compile the compose-unity launcher' }; \
-    Remove-Item -Force $source
+# Windows containers cannot start Electron's sandboxed GPU process. Keep Unity's
+# documented CLI syntax externally and translate it before launching Hub.
+COPY ["Unity Hub.cs", "compose-unity.cs", "C:/unity/"]
+RUN $project = 'C:\unity\launcher.csproj'; \
+    $hubSource = 'C:\unity\Unity Hub.cs'; \
+    $composeSource = 'C:\unity\compose-unity.cs'; \
+    $hubPublish = 'C:\unity\publish-hub'; \
+    $composePublish = 'C:\unity\publish-compose'; \
+    Set-Content -LiteralPath $project -Encoding UTF8 -Value @( \
+        '<Project Sdk=''Microsoft.NET.Sdk''>', \
+        '  <PropertyGroup>', \
+        '    <OutputType>Exe</OutputType>', \
+        '    <TargetFramework>net9.0</TargetFramework>', \
+        '    <PublishSingleFile>true</PublishSingleFile>', \
+        '    <SelfContained>false</SelfContained>', \
+        '    <RuntimeIdentifier>win-x64</RuntimeIdentifier>', \
+        '    <DebugType>none</DebugType>', \
+        '    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>', \
+        '  </PropertyGroup>', \
+        '  <ItemGroup>', \
+        '    <Compile Include=''$(LauncherSource)'' />', \
+        '  </ItemGroup>', \
+        '</Project>' \
+    ); \
+    dotnet publish $project --nologo --configuration Release --output $hubPublish "-p:LauncherSource=$hubSource" -p:AssemblyName=unity-hub-launcher; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the Unity Hub launcher' }; \
+    Remove-Item -LiteralPath C:\unity\obj -Recurse -Force; \
+    dotnet publish $project --nologo --configuration Release --output $composePublish "-p:LauncherSource=$composeSource" -p:AssemblyName=compose-unity; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the compose-unity launcher' }; \
+    $hubArtifacts = @(Get-ChildItem -LiteralPath $hubPublish -File); \
+    if ($hubArtifacts.Count -ne 1 -or $hubArtifacts[0].Name -ne 'unity-hub-launcher.exe') { throw 'Unity Hub launcher publish did not produce exactly one executable' }; \
+    $composeArtifacts = @(Get-ChildItem -LiteralPath $composePublish -File); \
+    if ($composeArtifacts.Count -ne 1 -or $composeArtifacts[0].Name -ne 'compose-unity.exe') { throw 'compose-unity launcher publish did not produce exactly one executable' }; \
+    $hub = 'C:\Program Files\Unity Hub\Unity Hub.exe'; \
+    Move-Item -LiteralPath $hub -Destination 'C:\Program Files\Unity Hub\Unity Hub.real.exe'; \
+    Move-Item -LiteralPath $hubArtifacts[0].FullName -Destination $hub; \
+    Move-Item -LiteralPath $composeArtifacts[0].FullName -Destination C:\Windows\compose-unity.exe; \
+    Remove-Item -LiteralPath $project, $hubSource, $composeSource -Force; \
+    Remove-Item -LiteralPath C:\unity\bin, C:\unity\obj, $hubPublish, $composePublish -Recurse -Force
 
 ARG UNITY_TIMEOUT="14400"
 RUN compose-unity require slothsoft/unity; \
