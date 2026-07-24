@@ -12,6 +12,7 @@
       <dependency id="curl" />
       <dependency id="docker-cli" />
       <dependency id="nodejs" />
+      <dependency id="blender" version="[4.5,4.6)" />
       <dependency id="butler" />
       <dependency id="steamcmd" />
       <dependency id="vcredist140" />

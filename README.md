@@ -11,11 +11,12 @@ Both image variants provide:
 - Node.js and npm.
 - The itch.io Butler client.
 - SteamCMD.
+- Blender 4.5.
 - PHP and Composer.
 - A .NET SDK.
 - Git, curl, and archive utilities.
 
-The Linux image additionally includes Blender, DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image includes Windows GPU compatibility libraries plus native launchers for `compose-unity` and Unity Hub.
+The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image includes Windows GPU compatibility libraries plus native launchers for `compose-unity` and Unity Hub.
 
 ## Docker Contexts
 

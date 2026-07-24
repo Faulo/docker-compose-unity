@@ -103,6 +103,7 @@ RUN git config --global --add safe.directory *; \
     git --version; \
     php --version; \
     composer --version; \
+    blender --version; \
     butler --version; \
     npm --version; \
     dotnet --version; \
