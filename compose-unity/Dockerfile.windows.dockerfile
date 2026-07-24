@@ -119,6 +119,10 @@ RUN node C:\unity\patch-unity-hub.js; \
 COPY php.ini C:/tools/php82/custom.ini
 RUN Get-Content C:/tools/php82/custom.ini | Add-Content -Path C:/tools/php82/php.ini
 
+RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender 4.5'; \
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
+    [Environment]::SetEnvironmentVariable('Path', $blenderDirectory + ';' + $machinePath, 'Machine')
+
 # Test
 RUN git config --global --add safe.directory *; \
     curl.exe --version; \
