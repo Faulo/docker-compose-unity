@@ -15,6 +15,7 @@
       <dependency id="blender" version="[4.5,4.6)" />
       <dependency id="butler" />
       <dependency id="steamcmd" />
+      <dependency id="vcredist2010" />
       <dependency id="vcredist140" />
       <dependency id="php" version="[8.2,8.3)" />
       <dependency id="composer" />
