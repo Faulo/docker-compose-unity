@@ -7,7 +7,7 @@ SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell", "-NonInteractive
 WORKDIR C:/unity
 
 # GPU support
-COPY --from=windows-desktop ["C:/Windows/System32/ddraw.dll", "C:/Windows/System32/dsound.dll", "C:/Windows/System32/glu32.dll", "C:/Windows/System32/opengl32.dll", "C:/Windows/System32/avicap32.dll", "C:/Windows/System32/"]
+COPY --from=windows-desktop ["C:/Windows/System32/ddraw.dll", "C:/Windows/System32/dsound.dll", "C:/Windows/System32/glu32.dll", "C:/Windows/System32/opengl32.dll", "C:/Windows/System32/avicap32.dll", "C:/Windows/System32/msvfw32.dll", "C:/Windows/System32/"]
 
 # Chocolatey
 # Parentheses disambiguate PowerShell's type expression from Docker's exec form.
@@ -111,10 +111,6 @@ RUN Get-Content C:/tools/php82/compose-unity-extensions.ini | Add-Content -Path 
 RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender 4.5'; \
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
     [Environment]::SetEnvironmentVariable('Path', $blenderDirectory + ';' + $machinePath, 'Machine')
-
-# Blender loads Video for Windows through avicap32.dll before processing
-# command-line arguments. Server Core omits its msvfw32.dll dependency.
-COPY --from=windows-desktop ["C:/Windows/System32/msvfw32.dll", "C:/Windows/System32/"]
 
 # Test
 RUN git config --global --add safe.directory *; \
