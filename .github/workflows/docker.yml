@@ -21,18 +21,10 @@ concurrency:
 
 jobs:
     publish:
-        strategy:
-            fail-fast: false
-            matrix:
-                variant:
-                    - tag: latest
-                      build_args: {}
-
         uses: Faulo/workflows-docker/.github/workflows/publish.yml@v1
         with:
             image: compose-unity
-            tag: ${{matrix.variant.tag}}
-            build_args: ${{toJSON(matrix.variant.build_args)}}
+            tag: latest
         secrets:
             DOCKERHUB_USERNAME: ${{secrets.DOCKERHUB_USERNAME}}
             DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
