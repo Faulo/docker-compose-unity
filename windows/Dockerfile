@@ -123,16 +123,15 @@ RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender 4.5'; \
     }; \
     $openCommandKey = Join-Path $classesRoot "$blenderFileClass\shell\open\command"; \
     New-Item -Path $openCommandKey -Force | Out-Null; \
-    $openCommand = '"' + $blenderExecutable + '" "%1"'; \
+    $quote = [char]34; \
+    $openCommand = $quote + $blenderExecutable + $quote + ' ' + $quote + '%1' + $quote; \
     Set-Item -Path $openCommandKey -Value $openCommand; \
     foreach ($extension in '.blend', '.fbx') { \
         $registeredClass = (Get-Item (Join-Path $classesRoot $extension)).GetValue(''); \
         if ($registeredClass -ne $blenderFileClass) { throw "Unexpected $extension file association: $registeredClass" } \
     }; \
     $registeredCommand = (Get-Item $openCommandKey).GetValue(''); \
-    if ($registeredCommand -ne $openCommand) { throw "Unexpected Blender open command: $registeredCommand" }; \
-    Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class ShellAssociation { [DllImport("shell32.dll")] public static extern void SHChangeNotify(uint eventId, uint flags, IntPtr item1, IntPtr item2); }'; \
-    [ShellAssociation]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+    if ($registeredCommand -ne $openCommand) { throw "Unexpected Blender open command: $registeredCommand" }
 
 # Test
 RUN git config --global --add safe.directory *; \
