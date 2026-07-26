@@ -20,124 +20,19 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
-    docker-windows:
-        runs-on: windows-2022
-        timeout-minutes: 180
-        strategy:
-            fail-fast: true
-            matrix:
-                image: ["compose-unity"]
-                os: ["windows"]
-        steps:
-            - name: Ensure Docker is running
-              shell: pwsh
-              run: |
-                  $service = Get-Service docker -ErrorAction Stop
-                  if ($service.Status -ne 'Running') {
-                    Start-Service docker
-                  }
-
-                  $ready = $false
-                  for ($attempt = 1; $attempt -le 24; $attempt++) {
-                    docker version *> $null
-                    if ($LASTEXITCODE -eq 0) {
-                      $ready = $true
-                      break
-                    }
-
-                    Start-Sleep -Seconds 5
-                  }
-
-                  if (-not $ready) {
-                    Get-Service docker
-                    throw "Docker daemon not ready after 120 seconds"
-                  }
-
-                  docker version
-            - name: Checkout
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-            - name: Login to Docker Hub
-              uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
-              with:
-                  username: ${{ secrets.DOCKERHUB_USERNAME }}
-                  password: ${{ secrets.DOCKERHUB_TOKEN }}
-            - name: Restore Windows image cache
-              continue-on-error: true
-              run: docker image pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
-            - name: Build ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
-              working-directory: ${{ matrix.os }}
-              run: >-
-                  docker build --isolation=hyperv
-                  --cache-from ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
-                  --tag ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
-                  .
-            - name: Push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
-              run: docker image push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
-
-    docker-linux:
-        runs-on: ubuntu-24.04
-        timeout-minutes: 90
-        strategy:
-            fail-fast: true
-            matrix:
-                image: ["compose-unity"]
-                os: ["linux"]
-        steps:
-            - name: Checkout
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-            - name: Login to Docker Hub
-              uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
-              with:
-                  username: ${{ secrets.DOCKERHUB_USERNAME }}
-                  password: ${{ secrets.DOCKERHUB_TOKEN }}
-            - name: Build and push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
-              uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
-              with:
-                  context: ${{ matrix.os }}
-                  push: true
-                  pull: true
-                  tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest-${{ matrix.os }}
-                  platforms: ${{ matrix.os }}/amd64
-                  cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.os }}
-                  cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.os }}
-                  provenance: mode=max
-                  sbom: true
-
-    merge:
-        runs-on: ubuntu-24.04
-        timeout-minutes: 15
-        needs:
-            - docker-windows
-            - docker-linux
+    publish:
         strategy:
             fail-fast: false
             matrix:
-                image: ["compose-unity"]
-        steps:
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-            - name: Login to Docker Hub
-              uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
-              with:
-                  username: ${{ secrets.DOCKERHUB_USERNAME }}
-                  password: ${{ secrets.DOCKERHUB_TOKEN }}
-            - name: Merge manifests
-              env:
-                  IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}
-              run: |
-                  docker buildx imagetools create \
-                    --tag "${IMAGE}:latest" \
-                    "${IMAGE}:latest-linux" \
-                    "${IMAGE}:latest-windows"
-            - name: Verify merged manifest
-              env:
-                  IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}
-              run: |
-                  manifest="$(docker buildx imagetools inspect "${IMAGE}:latest" --raw)"
-                  jq -e '
-                    any(.manifests[]; .platform.os == "linux" and .platform.architecture == "amd64") and
-                    any(.manifests[]; .platform.os == "windows" and .platform.architecture == "amd64")
-                  ' <<< "${manifest}"
-                  docker buildx imagetools inspect "${IMAGE}:latest"
+                variant:
+                    - tag: latest
+                      build_args: {}
+
+        uses: Faulo/workflows-docker/.github/workflows/publish.yml@v1
+        with:
+            image: compose-unity
+            tag: ${{matrix.variant.tag}}
+            build_args: ${{toJSON(matrix.variant.build_args)}}
+        secrets:
+            DOCKERHUB_USERNAME: ${{secrets.DOCKERHUB_USERNAME}}
+            DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
