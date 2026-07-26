@@ -110,8 +110,29 @@ COPY php-extensions.ini C:/tools/php82/compose-unity-extensions.ini
 RUN Get-Content C:/tools/php82/compose-unity-extensions.ini | Add-Content -Path C:/tools/php82/php.ini
 
 RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender 4.5'; \
+    $blenderExecutable = Join-Path $blenderDirectory 'blender.exe'; \
+    if (-not (Test-Path -LiteralPath $blenderExecutable)) { throw "Blender executable not found: $blenderExecutable" }; \
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
-    [Environment]::SetEnvironmentVariable('Path', $blenderDirectory + ';' + $machinePath, 'Machine')
+    [Environment]::SetEnvironmentVariable('Path', $blenderDirectory + ';' + $machinePath, 'Machine'); \
+    $blenderFileClass = 'blender.4.5'; \
+    $classesRoot = 'HKLM:\SOFTWARE\Classes'; \
+    foreach ($extension in '.blend', '.fbx') { \
+        $extensionKey = Join-Path $classesRoot $extension; \
+        New-Item -Path $extensionKey -Force | Out-Null; \
+        Set-Item -Path $extensionKey -Value $blenderFileClass \
+    }; \
+    $openCommandKey = Join-Path $classesRoot "$blenderFileClass\shell\open\command"; \
+    New-Item -Path $openCommandKey -Force | Out-Null; \
+    $openCommand = '"' + $blenderExecutable + '" "%1"'; \
+    Set-Item -Path $openCommandKey -Value $openCommand; \
+    foreach ($extension in '.blend', '.fbx') { \
+        $registeredClass = (Get-Item (Join-Path $classesRoot $extension)).GetValue(''); \
+        if ($registeredClass -ne $blenderFileClass) { throw "Unexpected $extension file association: $registeredClass" } \
+    }; \
+    $registeredCommand = (Get-Item $openCommandKey).GetValue(''); \
+    if ($registeredCommand -ne $openCommand) { throw "Unexpected Blender open command: $registeredCommand" }; \
+    Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class ShellAssociation { [DllImport("shell32.dll")] public static extern void SHChangeNotify(uint eventId, uint flags, IntPtr item1, IntPtr item2); }'; \
+    [ShellAssociation]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)
 
 # Test
 RUN git config --global --add safe.directory *; \

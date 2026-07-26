@@ -16,7 +16,7 @@ Both image variants provide:
 - A .NET SDK.
 - Git, curl, and archive utilities.
 
-The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image includes .NET Framework 4.7.1 reference assemblies, Windows GPU compatibility libraries, and native launchers for `compose-unity` and Unity Hub.
+The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image includes .NET Framework 4.7.1 reference assemblies, Windows GPU compatibility libraries, native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
 
 ## Repository Layout
 
