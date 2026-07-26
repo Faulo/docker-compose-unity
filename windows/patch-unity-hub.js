@@ -47,6 +47,11 @@ replaceOnce(
     'Hub download retry behavior',
 );
 replaceOnce(
+    'logger.info("executing",s,l),e){const e=featureFlagsService.getFlagByName',
+    'logger.info("executing",s,l),0){const e=featureFlagsService.getFlagByName',
+    'Windows installer elevation',
+);
+replaceOnce(
     'function installFromExe(e,r,t){return logger.debug("installFromExe"),new Promise(((o,n)=>{let i="/S";r&&""!==r&&(i=r);let a="";t&&(a=`/D=${t}`),logger.info(`install ${e} ${i} ${a}`),proc.exec(`"${e}" ${i} ${a}`,{name:"Unity installer"},((e,r)=>{e?n(e):r?n(r):o()}))}))}',
     'function installFromExe(e,r,t){return new Promise(((o,n)=>{let i=r||"/S",a=t?`/D=${t}`:"",s=30,c=()=>proc.exec(`"${e}" ${i} ${a}`,{name:"Unity installer"},((e,r)=>{e&&/another process/.test(e.message)&&s--?setTimeout(c,1000):e?n(e):r?n(r):o()}));setTimeout(c,1000)}))}',
     'Windows editor installer',

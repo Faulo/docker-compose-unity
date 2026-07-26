@@ -136,4 +136,4 @@ compose-unity exec unity-empty-project test 2021.3.45f1
 
 Linux installs `linux/compose-unity` as a shell launcher. Windows compiles `windows/compose-unity.cs` into `C:/Windows/compose-unity.exe`, which invokes Composer without requiring `cmd /C`.
 
-The Windows image also compiles a Unity Hub launcher that adapts headless command-line arguments for Windows containers and applies download retry handling during the image build.
+The Windows image also compiles a Unity Hub launcher that adapts headless command-line arguments for Windows containers. Its embedded Hub runtime is patched to retry interrupted downloads and launch Editor installers directly instead of waiting for unavailable UAC interaction.

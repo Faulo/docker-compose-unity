@@ -99,10 +99,11 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
     Remove-Item -LiteralPath $extractRoot -Recurse -Force; \
     Remove-Item -Force $installer
 
-# Resume large Editor downloads after temporary CDN stalls.
+# Resume large Editor downloads after temporary CDN stalls and launch the
+# installer helper directly because Windows containers cannot display UAC.
 COPY patch-unity-hub.js C:/unity/patch-unity-hub.js
 RUN node C:\unity\patch-unity-hub.js; \
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to enable Unity Hub download retries' }; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to patch Unity Hub for Windows containers' }; \
     Remove-Item -Force C:\unity\patch-unity-hub.js
 
 COPY php-extensions.ini C:/tools/php82/compose-unity-extensions.ini
