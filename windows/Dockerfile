@@ -1,18 +1,50 @@
-FROM mcr.microsoft.com/windows:1809 AS windows-desktop
+FROM mcr.microsoft.com/windows:1809
 
-FROM mcr.microsoft.com/dotnet/framework/runtime:4.8-windowsservercore-ltsc2019
-
-SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell", "-ExecutionPolicy", "Bypass", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
 WORKDIR C:/unity
 
-# GPU support
-COPY --from=windows-desktop ["C:/Windows/System32/ddraw.dll", "C:/Windows/System32/dsound.dll", "C:/Windows/System32/glu32.dll", "C:/Windows/System32/opengl32.dll", "C:/Windows/System32/avicap32.dll", "C:/Windows/System32/msvfw32.dll", "C:/Windows/System32/"]
+# The full Windows image supplies the desktop WinRT classes required by Unity.
+# It includes .NET Framework 4.7.2; later in-place releases require a Windows
+# servicing reboot, which cannot be completed while building a container layer.
+ENV COMPLUS_RUNNING_IN_CONTAINER=1
+ENV COMPLUS_NGenProtectedProcess_FeatureEnabled=0
+RUN $policyKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; \
+    Set-ItemProperty -LiteralPath $policyKey -Name ConsentPromptBehaviorAdmin -Value 0; \
+    Set-ItemProperty -LiteralPath $policyKey -Name PromptOnSecureDesktop -Value 0
 
 # Chocolatey
-# Parentheses disambiguate PowerShell's type expression from Docker's exec form.
-RUN ([System.Net.ServicePointManager]::SecurityProtocol) = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
-    iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+# Chocolatey's current bootstrapper requires .NET Framework 4.8. Install the
+# last 1.x package directly so the image can use Windows 1809's built-in 4.7.2.
+RUN $archive = 'C:\chocolatey.1.4.0.zip'; \
+    $extractRoot = 'C:\chocolatey.1.4.0'; \
+    Invoke-WebRequest -Uri 'https://community.chocolatey.org/api/v2/package/chocolatey/1.4.0' -OutFile $archive; \
+    $actualHash = (Get-FileHash -Algorithm SHA256 $archive).Hash; \
+    if ($actualHash -ne '1660261EDD358FF5EA84A503CA3F01A24DDB0E281002BD4237B1071289161A26') { \
+        throw ('Chocolatey package checksum mismatch: ' + $actualHash) \
+    }; \
+    Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot; \
+    $env:ChocolateyInstall = 'C:\ProgramData\chocolatey'; \
+    $env:ChocolateyPackageVersion = '1.4.0'; \
+    [Environment]::SetEnvironmentVariable('ChocolateyInstall', $env:ChocolateyInstall, 'Machine'); \
+    & (Join-Path $extractRoot 'tools\chocolateyInstall.ps1'); \
+    Remove-Item -LiteralPath $archive, $extractRoot -Recurse -Force; \
+    choco --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to install Chocolatey' }
+
+RUN choco install 7zip.portable --version=26.2.0 --no-progress --yes; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to install 7-Zip' }
+
+# Keep the full desktop API surface visible as an explicit image invariant.
+RUN foreach ($dll in 'ddraw.dll', 'dsound.dll', 'glu32.dll', 'opengl32.dll', 'avicap32.dll', 'msvfw32.dll') { \
+        $path = Join-Path $env:WINDIR ('System32\' + $dll); \
+        if (-not (Test-Path -LiteralPath $path)) { throw ('Desktop runtime DLL not found: ' + $path) } \
+    }; \
+    foreach ($typeName in 'Windows.UI.ViewManagement.UISettings', 'Windows.UI.ViewManagement.AccessibilitySettings') { \
+        $type = [Type]::GetType(($typeName + ', Windows, ContentType=WindowsRuntime'), $true); \
+        $instance = [Activator]::CreateInstance($type); \
+        if ($null -eq $instance) { throw ('Failed to activate WinRT type: ' + $typeName) } \
+    }
 
 # Tools
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
@@ -51,7 +83,7 @@ RUN $package = 'C:\net471-reference-assemblies.nupkg'; \
     Remove-Item -LiteralPath $package, $extractRoot -Recurse -Force
 
 # Unity publishes the 3.12.1 installer under its 3.12.0 archive path. Its NSIS
-# process can hang on Server Core, so fall back to its verified app archive.
+# process can hang in a container, so fall back to its verified app archive.
 ENV UNITY_HUB_VERSION=3.12.1
 RUN $installer = 'C:\UnityHubSetup.exe'; \
     $hubDirectory = 'C:\Program Files\Unity Hub'; \
