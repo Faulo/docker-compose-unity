@@ -25,9 +25,6 @@ RUN choco pack compose-unity.nuspec; \
     Remove-Item -Force *.nuspec; \
     Remove-Item -Force *.nupkg
 
-RUN choco install 7zip.portable --version=26.2.0 --no-progress --yes; \
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to install 7-Zip' }
-
 # Unity-generated projects can target .NET Framework 4.7.1 even when a newer
 # runtime is installed. The Developer Pack installer hangs under Hyper-V
 # isolation, so install Microsoft's reference-assemblies package for MSBuild.

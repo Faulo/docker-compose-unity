@@ -19,6 +19,7 @@
       <dependency id="vcredist140" />
       <dependency id="php" version="[8.2,8.3)" />
       <dependency id="composer" />
+      <dependency id="7zip.portable" />
       <dependency id="dotnet-9.0-sdk" />
     </dependencies>
   </metadata>
