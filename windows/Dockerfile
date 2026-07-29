@@ -199,9 +199,9 @@ RUN $system32 = 'C:\Windows\System32\shell32.dll'; \
 # Run both architectures in a fresh layer so KnownDLL resolution loads the
 # proxies rather than the original DLLs mapped by the replacement layer.
 RUN & 'C:\unity\Shell32Proxy\shell32-proxy-test-x64.exe'; \
-    if ($LASTEXITCODE -ne 0) { throw "64-bit SHELL32 proxy test failed with exit code $LASTEXITCODE" }; \
+    if ($LASTEXITCODE -ne 0) { throw ('64-bit SHELL32 proxy test failed with exit code {0}' -f $LASTEXITCODE) }; \
     & 'C:\unity\Shell32Proxy\shell32-proxy-test-x86.exe'; \
-    if ($LASTEXITCODE -ne 0) { throw "32-bit SHELL32 proxy test failed with exit code $LASTEXITCODE" }; \
+    if ($LASTEXITCODE -ne 0) { throw ('32-bit SHELL32 proxy test failed with exit code {0}' -f $LASTEXITCODE) }; \
     Remove-Item -LiteralPath C:\unity\Shell32Proxy -Recurse -Force
 
 # Test
