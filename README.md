@@ -137,3 +137,10 @@ compose-unity exec unity-empty-project test 2021.3.45f1
 Linux installs `linux/compose-unity` as a shell launcher. Windows compiles `windows/compose-unity.cs` into `C:/Windows/compose-unity.exe`, which invokes Composer without requiring `cmd /C`.
 
 The Windows image also compiles a Unity Hub launcher that adapts headless command-line arguments for Windows containers. Its embedded Hub runtime is patched to retry interrupted downloads and launch Editor installers directly instead of waiting for unavailable UAC interaction.
+
+Windows containers do not provide the interactive desktop shell expected by
+`FindExecutableW` and `ShellExecuteExW`. The image replaces both 64-bit and
+32-bit `SHELL32.dll` with compatibility proxies that preserve all original
+exports while resolving registered file associations through `SHLWAPI` and
+launching executables through `CreateProcessW`. The original Microsoft DLLs
+remain beside the proxies as `shell32real.dll` and handle all other shell APIs.
