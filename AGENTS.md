@@ -31,6 +31,8 @@ The root `.env` is the authoritative project configuration:
 - `DOCKER_TEST_ARGS_LINUX` and `DOCKER_TEST_ARGS_WINDOWS` supply container-OS-specific `docker run` options such as volume paths.
 - `DOCKER_TEST_CMD` supplies the single command used to test the image.
 
+Docker images whose repository name starts with `tmp/` are disposable and mutable. Agents may build, tag, overwrite, or remove only images in this namespace. All other Docker images are read-only: do not build, tag, overwrite, remove, or otherwise mutate them.
+
 Read these values using facilities available in the current shell. Decode surrounding dotenv quotes and escaped inner quotes before constructing commands. Do not print, commit, or embed the values of credentials forwarded by `DOCKER_TEST_ARGS`.
 
 Do not hardcode project-specific image names, test commands, run arguments, credential forwarding, or volume mounts in the reusable root batch scripts. Put that configuration in `.env`.
