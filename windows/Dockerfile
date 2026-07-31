@@ -1,12 +1,12 @@
-FROM mcr.microsoft.com/windows:1809
+FROM mcr.microsoft.com/windows:20H2
 
 SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell", "-ExecutionPolicy", "Bypass", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
 WORKDIR C:/unity
 
 # The full Windows image supplies the desktop WinRT classes required by Unity.
-# It includes .NET Framework 4.7.2; later in-place releases require a Windows
-# servicing reboot, which cannot be completed while building a container layer.
+# Windows 20H2 includes .NET Framework 4.8 in the base OS, avoiding the
+# reboot-dependent Framework prerequisite installation chained by Unity.
 ENV COMPLUS_RUNNING_IN_CONTAINER=1
 ENV COMPLUS_NGenProtectedProcess_FeatureEnabled=0
 RUN $policyKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; \
@@ -14,8 +14,8 @@ RUN $policyKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Syste
     Set-ItemProperty -LiteralPath $policyKey -Name PromptOnSecureDesktop -Value 0
 
 # Chocolatey
-# Chocolatey's current bootstrapper requires .NET Framework 4.8. Install the
-# last 1.x package directly so the image can use Windows 1809's built-in 4.7.2.
+# Install a pinned Chocolatey package directly so its bootstrap remains
+# reproducible and does not depend on the current remote installation script.
 RUN $archive = 'C:\chocolatey.1.4.0.zip'; \
     $extractRoot = 'C:\chocolatey.1.4.0'; \
     Invoke-WebRequest -Uri 'https://community.chocolatey.org/api/v2/package/chocolatey/1.4.0' -OutFile $archive; \
@@ -32,9 +32,6 @@ RUN $archive = 'C:\chocolatey.1.4.0.zip'; \
     choco --version; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to install Chocolatey' }
 
-RUN choco install 7zip.portable --version=26.2.0 --no-progress --yes; \
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to install 7-Zip' }
-
 # Keep the full desktop API surface visible as an explicit image invariant.
 RUN foreach ($dll in 'ddraw.dll', 'dsound.dll', 'glu32.dll', 'opengl32.dll', 'avicap32.dll', 'msvfw32.dll') { \
         $path = Join-Path $env:WINDIR ('System32\' + $dll); \
@@ -49,8 +46,17 @@ RUN foreach ($dll in 'ddraw.dll', 'dsound.dll', 'glu32.dll', 'opengl32.dll', 'av
 # Tools
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
 ENV DOTNET_CLI_UI_LANGUAGE=en
+ARG BLENDER_SERIES=4.5
 COPY compose-unity.nuspec compose-unity.nuspec
-RUN choco pack compose-unity.nuspec; \
+RUN $seriesMatch = [regex]::Match($env:BLENDER_SERIES, '^(?<major>\d+)\.(?<minor>\d+)$'); \
+    if (-not $seriesMatch.Success) { throw "Invalid Blender series: $env:BLENDER_SERIES" }; \
+    $nextSeries = '{0}.{1}' -f $seriesMatch.Groups['major'].Value, ([int]$seriesMatch.Groups['minor'].Value + 1); \
+    [xml]$packageSpec = Get-Content -LiteralPath compose-unity.nuspec; \
+    $blenderDependencies = @($packageSpec.package.metadata.dependencies.dependency | Where-Object id -eq 'blender'); \
+    if ($blenderDependencies.Count -ne 1) { throw "Expected one Blender dependency, found $($blenderDependencies.Count)" }; \
+    $blenderDependencies[0].SetAttribute('version', '[' + $env:BLENDER_SERIES + ',' + $nextSeries + ')'); \
+    $packageSpec.Save((Resolve-Path -LiteralPath compose-unity.nuspec)); \
+    choco pack compose-unity.nuspec; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to pack compose-unity' }; \
     choco install compose-unity --no-progress --yes --ignore-checksums --execution-timeout=7200 --source '.;https://community.chocolatey.org/api/v2/'; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to install compose-unity dependencies' }; \
@@ -138,12 +144,12 @@ RUN node C:\unity\patch-unity-hub.js; \
 COPY php-extensions.ini C:/tools/php82/compose-unity-extensions.ini
 RUN Get-Content C:/tools/php82/compose-unity-extensions.ini | Add-Content -Path C:/tools/php82/php.ini
 
-RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender 4.5'; \
+RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender ' + $env:BLENDER_SERIES; \
     $blenderExecutable = Join-Path $blenderDirectory 'blender.exe'; \
     if (-not (Test-Path -LiteralPath $blenderExecutable)) { throw "Blender executable not found: $blenderExecutable" }; \
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
     [Environment]::SetEnvironmentVariable('Path', $blenderDirectory + ';' + $machinePath, 'Machine'); \
-    $blenderFileClass = 'blender.4.5'; \
+    $blenderFileClass = 'blender.' + $env:BLENDER_SERIES; \
     $classesRoot = 'HKLM:\SOFTWARE\Classes'; \
     foreach ($extension in '.blend', '.fbx') { \
         $extensionKey = Join-Path $classesRoot $extension; \
@@ -174,14 +180,14 @@ RUN $system32 = 'C:\Windows\System32\shell32.dll'; \
     $proxyX64 = 'C:\unity\Shell32Proxy\shell32-proxy-x64.dll'; \
     $proxyX86 = 'C:\unity\Shell32Proxy\shell32-proxy-x86.dll'; \
     $expectedHashes = @{ \
-        $system32 = '21D6FEA42AB851E94541312C7BCA664FD3B54823268D06FE49C81A68923F5FDC'; \
-        $sysWow64 = 'A39BDBD7CC43FBE96D3298A3D850AE19D75350AAFBE3C374315B0EF24459D8FF'; \
-        $proxyX64 = '78F9C72152CEFB5C56B906912D749CBDAA5C64651BE74B59F0284496E000F467'; \
-        $proxyX86 = 'EE8C50A9EA07D7FBDDB36BB798DF7F80264CD85DF28851973E06F80980C53FA9' \
+        $system32 = 'C694731586C13EA2621E2B6310157DB92AC815AF5FE9AF6C0D7E8E586616B342'; \
+        $sysWow64 = '7FCF03AD71A551B2F51433C9A6E553D4916BD021AA4A7FF637B9085EACF28043'; \
+        $proxyX64 = 'F629B1694B22A53A4CA0A442A9E37493DA8E08046450E5FB9D29DABC60DD6177'; \
+        $proxyX86 = 'EBDB8ED07DE897D93350818CE5F194C7B7A50B2551FA8F30F5611F328EBB6ACC' \
     }; \
     foreach ($path in $expectedHashes.Keys) { \
         $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash; \
-        if ($actualHash -ne $expectedHashes[$path]) { throw "Unexpected SHELL32 artifact hash for $path`: $actualHash" } \
+        if ($actualHash -ne $expectedHashes[$path]) { throw ('Unexpected SHELL32 artifact hash for ' + $path + ': ' + $actualHash) } \
     }; \
     foreach ($replacement in @( \
         @{ Original = $system32; Real = $system32Real; Proxy = $proxyX64 }, \
