@@ -1,5 +1,9 @@
 param(
     [Parameter(Mandatory)]
+    [ValidateNotNullOrEmpty()]
+    [string] $OsBase,
+
+    [Parameter(Mandatory)]
     [string] $OriginalX64,
 
     [Parameter(Mandatory)]
@@ -14,9 +18,16 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $sourceDirectory = $PSScriptRoot
+$outputDirectory = Join-Path $sourceDirectory $OsBase
+$hashManifest = Join-Path $outputDirectory 'shell32-hashes.psd1'
 $readObject = Join-Path $LlvmBin 'llvm-readobj.exe'
 $clang = Join-Path $LlvmBin 'clang-cl.exe'
 $linker = Join-Path $LlvmBin 'lld-link.exe'
+
+if (-not (Test-Path -LiteralPath $outputDirectory -PathType Container) -or
+    -not (Test-Path -LiteralPath $hashManifest -PathType Leaf)) {
+    throw "Unsupported Windows OS base: $OsBase"
+}
 
 foreach ($tool in $readObject, $clang, $linker) {
     if (-not (Test-Path -LiteralPath $tool)) {
@@ -85,11 +96,11 @@ function Build-Architecture {
         [string] $OriginalDll
     )
 
-    $object = Join-Path $sourceDirectory "shell32-proxy-$Architecture.obj"
+    $object = Join-Path $outputDirectory "shell32-proxy-$Architecture.obj"
     $testObject = Join-Path $sourceDirectory "shell32-proxy-test-$Architecture.obj"
-    $response = Join-Path $sourceDirectory "shell32-exports-$Architecture.rsp"
-    $proxy = Join-Path $sourceDirectory "shell32-proxy-$Architecture.dll"
-    $importLibrary = Join-Path $sourceDirectory "shell32-proxy-$Architecture.lib"
+    $response = Join-Path $outputDirectory "shell32-exports-$Architecture.rsp"
+    $proxy = Join-Path $outputDirectory "shell32-proxy-$Architecture.dll"
+    $importLibrary = Join-Path $outputDirectory "shell32-proxy-$Architecture.lib"
     $test = Join-Path $sourceDirectory "shell32-proxy-test-$Architecture.exe"
     $sdkLibraries = Join-Path $WindowsSdkLib $Architecture
     $targetArgument = if ($Architecture -eq 'x86') {
@@ -140,9 +151,9 @@ Build-Architecture x64 $OriginalX64
 Build-Architecture x86 $OriginalX86
 
 Get-FileHash -Algorithm SHA256 (
-    Join-Path $sourceDirectory 'shell32-proxy-x64.dll'
+    Join-Path $outputDirectory 'shell32-proxy-x64.dll'
 ), (
-    Join-Path $sourceDirectory 'shell32-proxy-x86.dll'
+    Join-Path $outputDirectory 'shell32-proxy-x86.dll'
 ), (
     Join-Path $sourceDirectory 'shell32-proxy-test-x64.exe'
 ), (

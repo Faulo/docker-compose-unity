@@ -1,12 +1,14 @@
-FROM mcr.microsoft.com/windows:20H2
+ARG OS_BASE=1809
+FROM mcr.microsoft.com/windows:${OS_BASE}
+
+ARG OS_BASE
 
 SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell", "-ExecutionPolicy", "Bypass", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
 WORKDIR C:/unity
 
-# The full Windows image supplies the desktop WinRT classes required by Unity.
-# Windows 20H2 includes .NET Framework 4.8 in the base OS, avoiding the
-# reboot-dependent Framework prerequisite installation chained by Unity.
+# The selectable full Windows base supplies the desktop WinRT classes required
+# by Unity. Shell compatibility artifacts below are tied to each OS build.
 ENV COMPLUS_RUNNING_IN_CONTAINER=1
 ENV COMPLUS_NGenProtectedProcess_FeatureEnabled=0
 RUN $policyKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; \
@@ -186,35 +188,8 @@ RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender ' + $env:BL
 # reliably resolve associations on mounted paths or launch executables without
 # Explorer. Preserve every original export through a proxy and replace only
 # FindExecutableW and ShellExecuteExW with container-safe implementations.
-COPY ["Shell32Proxy/shell32-proxy-x64.dll", "Shell32Proxy/shell32-proxy-x86.dll", "Shell32Proxy/shell32-proxy-test-x64.exe", "Shell32Proxy/shell32-proxy-test-x86.exe", "C:/unity/Shell32Proxy/"]
-RUN $system32 = 'C:\Windows\System32\shell32.dll'; \
-    $system32Real = 'C:\Windows\System32\shell32real.dll'; \
-    $sysWow64 = 'C:\Windows\SysWOW64\shell32.dll'; \
-    $sysWow64Real = 'C:\Windows\SysWOW64\shell32real.dll'; \
-    $proxyX64 = 'C:\unity\Shell32Proxy\shell32-proxy-x64.dll'; \
-    $proxyX86 = 'C:\unity\Shell32Proxy\shell32-proxy-x86.dll'; \
-    $expectedHashes = @{ \
-        $system32 = 'C694731586C13EA2621E2B6310157DB92AC815AF5FE9AF6C0D7E8E586616B342'; \
-        $sysWow64 = '7FCF03AD71A551B2F51433C9A6E553D4916BD021AA4A7FF637B9085EACF28043'; \
-        $proxyX64 = 'F629B1694B22A53A4CA0A442A9E37493DA8E08046450E5FB9D29DABC60DD6177'; \
-        $proxyX86 = 'EBDB8ED07DE897D93350818CE5F194C7B7A50B2551FA8F30F5611F328EBB6ACC' \
-    }; \
-    foreach ($path in $expectedHashes.Keys) { \
-        $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash; \
-        if ($actualHash -ne $expectedHashes[$path]) { throw ('Unexpected SHELL32 artifact hash for ' + $path + ': ' + $actualHash) } \
-    }; \
-    foreach ($replacement in @( \
-        @{ Original = $system32; Real = $system32Real; Proxy = $proxyX64 }, \
-        @{ Original = $sysWow64; Real = $sysWow64Real; Proxy = $proxyX86 } \
-    )) { \
-        if (Test-Path -LiteralPath $replacement.Real) { throw "SHELL32 backing DLL already exists: $($replacement.Real)" }; \
-        takeown.exe /F $replacement.Original /A | Out-Null; \
-        if ($LASTEXITCODE -ne 0) { throw "Failed to take ownership of $($replacement.Original)" }; \
-        icacls.exe $replacement.Original /grant '*S-1-5-32-544:F' | Out-Null; \
-        if ($LASTEXITCODE -ne 0) { throw "Failed to grant access to $($replacement.Original)" }; \
-        Move-Item -LiteralPath $replacement.Original -Destination $replacement.Real; \
-        Move-Item -LiteralPath $replacement.Proxy -Destination $replacement.Original \
-    }
+COPY Shell32Proxy C:/unity/Shell32Proxy
+RUN & 'C:\unity\Shell32Proxy\install.ps1'
 
 # Run both architectures in a fresh layer so KnownDLL resolution loads the
 # proxies rather than the original DLLs mapped by the replacement layer.

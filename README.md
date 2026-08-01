@@ -16,7 +16,7 @@ Both image variants provide:
 - A .NET SDK.
 - Git, curl, and archive utilities.
 
-The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image is based on the full Windows 20H2 container image so Unity packages can use desktop WinRT APIs. It includes the built-in .NET Framework 4.8 runtime, Visual Studio Build Tools with MSBuild, native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
+The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. It includes Visual Studio Build Tools with MSBuild, native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
 
 ## Repository Layout
 
@@ -100,6 +100,8 @@ The Windows build script resolves to:
 ```text
 docker --context windows build --tag tmp/compose-unity:latest --file windows/Dockerfile windows
 ```
+
+To build the Windows 20H2 variant explicitly, add `--build-arg OS_BASE=20H2`.
 
 The Linux test script reconstructs:
 
