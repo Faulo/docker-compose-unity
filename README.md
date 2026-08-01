@@ -16,7 +16,7 @@ Both image variants provide:
 - A .NET SDK.
 - Git, curl, and archive utilities.
 
-The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. It includes Visual Studio Build Tools with MSBuild, native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
+The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. The 20H2 variant includes Visual Studio Build Tools with MSBuild, while the 1809 variant uses the .NET SDK's MSBuild fallback to remain compatible with its older .NET Framework runtime. Both include native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
 
 ## Repository Layout
 
