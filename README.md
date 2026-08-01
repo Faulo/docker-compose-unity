@@ -103,6 +103,11 @@ docker --context windows build --tag tmp/compose-unity:latest --file windows/Doc
 
 To build the Windows 20H2 variant explicitly, add `--build-arg OS_BASE=20H2`.
 
+GitHub Actions publishes the Windows variants as `latest-windows-20H2` and
+`latest-windows-1809`. The `latest` manifest lists 20H2 before 1809 so newer
+Hyper-V-capable hosts prefer 20H2 while 1809 hosts fall back to their compatible
+image.
+
 The Linux test script reconstructs:
 
 ```text

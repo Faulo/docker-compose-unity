@@ -38,6 +38,11 @@ jobs:
         uses: Faulo/workflows-docker/.github/workflows/publish.yml@v1
         with:
             image: ${{needs.configuration.outputs.image}}
+            windows_variants: >-
+                [
+                  {"tag":"windows-20H2","build_args":{"OS_BASE":"20H2"}},
+                  {"tag":"windows-1809","build_args":{"OS_BASE":"1809"}}
+                ]
         secrets:
             DOCKERHUB_USERNAME: ${{secrets.DOCKERHUB_USERNAME}}
             DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
