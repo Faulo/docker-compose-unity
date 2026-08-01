@@ -90,8 +90,8 @@ RUN $package = 'C:\net471-reference-assemblies.nupkg'; \
     }; \
     Remove-Item -LiteralPath $package, $extractRoot -Recurse -Force
 
-# Newer MSBuild releases require .NET Framework behavior unavailable in some
-# Windows bases. Let each base select whether Build Tools can be installed.
+# Use the supported Visual Studio 2019 servicing baseline because Visual Studio
+# 2022 MSBuild is incompatible with the .NET Framework build host used here.
 COPY WindowsBase C:/unity/WindowsBase
 RUN & 'C:\unity\WindowsBase\install.ps1'; \
     Remove-Item -LiteralPath C:\unity\WindowsBase -Recurse -Force

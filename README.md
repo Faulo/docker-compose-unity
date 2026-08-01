@@ -16,7 +16,7 @@ Both image variants provide:
 - A .NET SDK.
 - Git, curl, and archive utilities.
 
-The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. Both Windows variants use the .NET SDK's MSBuild fallback because Visual Studio Build Tools 17.14 is incompatible with the build host used by `dotnet format` and DocFX. Both include native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
+The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. Both Windows variants include the supported Visual Studio 2019 Build Tools servicing baseline. Visual Studio 2022 Build Tools are not used because their MSBuild assemblies are incompatible with the .NET Framework build host used by `dotnet format` and DocFX. Both variants also include native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
 
 ## Repository Layout
 

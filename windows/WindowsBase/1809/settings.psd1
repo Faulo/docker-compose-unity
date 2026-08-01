@@ -1,3 +1,3 @@
 @{
-    InstallBuildTools = $false
+    InstallBuildTools = $true
 }
