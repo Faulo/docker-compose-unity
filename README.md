@@ -22,10 +22,11 @@ The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server.
 
 Build inputs are organized by ownership:
 
-- `linux/` contains the self-contained Linux build context, Dockerfile, launcher, and machine identity.
-- `windows/` contains the self-contained Windows build context, Dockerfile, launchers, Hub patch, Chocolatey package, and PHP extension configuration.
+- `common/` contains shared cross-platform launcher and sidecar source.
+- `linux/` contains the Linux Dockerfile and machine identity.
+- `windows/` contains the Windows Dockerfile, Hub launcher and patch, Chocolatey package, and PHP extension configuration.
 
-Each Docker build uses its platform directory as the build context. Both images create their Composer project during the build, require `slothsoft/unity`, and configure the process timeout from `UNITY_TIMEOUT`.
+Both Docker builds use the repository root as build context. Both images create their Composer project during the build, require `slothsoft/unity`, and configure the process timeout from `UNITY_TIMEOUT`.
 
 ## Docker Contexts
 
@@ -92,13 +93,13 @@ Calling `docker-build.bat` or `docker-test.bat` without an argument omits `--con
 The Linux build script resolves to:
 
 ```text
-docker --context linux build --tag tmp/compose-unity:latest --file linux/Dockerfile linux
+docker --context linux build --tag tmp/compose-unity:latest --file linux/Dockerfile .
 ```
 
 The Windows build script resolves to:
 
 ```text
-docker --context windows build --tag tmp/compose-unity:latest --file windows/Dockerfile windows
+docker --context windows build --tag tmp/compose-unity:latest --file windows/Dockerfile .
 ```
 
 To build the Windows 20H2 variant explicitly, add `--build-arg OS_BASE=20H2`.
@@ -141,7 +142,59 @@ Both images expose the same `compose-unity` command:
 compose-unity exec unity-empty-project test 2021.3.45f1
 ```
 
-Linux installs `linux/compose-unity` as a shell launcher. Windows compiles `windows/compose-unity.cs` into `C:/Windows/compose-unity.exe`, which invokes Composer without requiring `cmd /C`.
+Both images compile the shared C# source in `common/` into native launchers named `compose-unity` and `compose-unity-sidecar`. The launcher invokes Composer without an intermediate shell, preserves attached input, output, and exit status, and registers each call with the sidecar.
+
+## Long-Running Sidecar
+
+With no explicit command, the image starts `compose-unity-sidecar` as PID 1. Start a Linux sidecar with persistent editor and Unity state volumes:
+
+```text
+docker run -d --name unity \
+  -v unity-binaries:/root/Unity \
+  -v unity-config:/root/.config/unity3d \
+  faulo/compose-unity:latest
+```
+
+Start a Windows sidecar with equivalent persistent volumes:
+
+```text
+docker run -d --name unity `
+  -v "unity-binaries:C:/Program Files/Unity/Hub/Editor" `
+  -v "unity-config:C:/Users/ContainerAdministrator/AppData/Roaming/Unity" `
+  faulo/compose-unity:latest
+```
+
+Mount the project workspace when starting the container, then select it for each call:
+
+```text
+docker exec --workdir <workspace> unity compose-unity exec unity-build ...
+```
+
+Forward invocation-specific environment variables with `docker exec --env NAME` or set container-wide values with `docker run --env NAME`. Environment values and full argument lists are never written to sidecar state or logs.
+
+Each invocation has a maximum duration controlled by `COMPOSE_UNITY_CALL_TIMEOUT`. The default is `86400` seconds (24 hours). A container-wide value may be overridden per call:
+
+```text
+docker exec --env COMPOSE_UNITY_CALL_TIMEOUT=7200 unity compose-unity exec unity-build ...
+```
+
+Set the value to `0` to disable the call limit. Invalid and negative values fail before Composer starts. A timed-out call terminates its Composer/Unity process tree and returns exit code `124`; the sidecar remains available and healthy.
+
+Inspect lifecycle events, active calls, and Docker health:
+
+```text
+docker logs unity
+docker exec unity compose-unity-sidecar status
+docker inspect --format '{{.State.Health.Status}}' unity
+```
+
+Logs contain sanitized `READY`, `START`, `END`, `FAILED`, `CANCELLED`, `TIMEOUT`, and `ORPHANED` summaries. Full Unity output remains attached to the originating `docker exec` call. Health checks are offline and remain healthy while builds are active.
+
+An explicit command overrides the default sidecar command, preserving one-off usage:
+
+```text
+docker run --rm faulo/compose-unity:latest compose-unity exec unity-build ...
+```
 
 The Windows image also compiles a Unity Hub launcher that adapts headless command-line arguments for Windows containers. Its embedded Hub runtime is patched to retry interrupted downloads and launch Editor installers directly instead of waiting for unavailable UAC interaction.
 

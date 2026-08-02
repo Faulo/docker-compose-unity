@@ -5,6 +5,7 @@ on:
         branches:
             - "main"
         paths:
+            - "common/**"
             - "linux/**"
             - "windows/**"
             - ".github/workflows/docker.yml"
@@ -38,6 +39,8 @@ jobs:
         uses: Faulo/workflows-docker/.github/workflows/publish.yml@v1
         with:
             image: ${{needs.configuration.outputs.image}}
+            linux_context: .
+            windows_context: .
             windows_variants: >-
                 [
                   {"tag":"windows-20H2","build_args":{"OS_BASE":"20H2"}},

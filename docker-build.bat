@@ -28,10 +28,8 @@ if not exist "%DOCKER_OS%\Dockerfile" (
     goto build_done
 )
 
-pushd "%DOCKER_OS%"
-docker %DOCKER_CONTEXT_ARGS% build --pull --tag tmp/%DOCKER_IMAGE%:latest .
+docker %DOCKER_CONTEXT_ARGS% build --pull --tag tmp/%DOCKER_IMAGE%:latest --file "%DOCKER_OS%\Dockerfile" .
 set "BUILD_EXIT_CODE=%ERRORLEVEL%"
-popd
 
 :build_done
 pause

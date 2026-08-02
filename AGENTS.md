@@ -13,7 +13,7 @@ These short messages have special handling when they appear alone in a user mess
 
 ## Repository and Environment
 
-This repository builds Linux and Windows variants of one Docker image. Each platform is self-contained: Linux build inputs live in `linux/`, and Windows build inputs live in `windows/`.
+This repository builds Linux and Windows variants of one Docker image. Shared build inputs live in `common/`; platform-specific inputs live in `linux/` and `windows/`. Both builds use the repository root as Docker build context.
 
 The host provides a `docker` client in its shell. Do not assume a particular host operating system, shell, or additional host tooling.
 
@@ -60,8 +60,8 @@ In the templates below, `{IMAGE}` means `tmp/{DOCKER_IMAGE}:latest`. Replace eve
 Use these full build templates from the repository root:
 
 ```text
-docker --context linux build --tag {IMAGE} --file linux/Dockerfile linux
-docker --context windows build --tag {IMAGE} --file windows/Dockerfile windows
+docker --context linux build --tag {IMAGE} --file linux/Dockerfile .
+docker --context windows build --tag {IMAGE} --file windows/Dockerfile .
 ```
 
 For a targeted build, add Docker options such as `--target`, `--build-arg`, `--no-cache`, or `--progress plain` to the matching command, but retain its explicit context, Dockerfile, tag, and build context.

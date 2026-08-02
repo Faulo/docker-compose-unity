@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ComposeUnityTargetFramework Condition="'$(ComposeUnityTargetFramework)' == ''">net8.0</ComposeUnityTargetFramework>
+    <TargetFramework>$(ComposeUnityTargetFramework)</TargetFramework>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <DebugType>none</DebugType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>compose-unity</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="ComposeUnity.cs" />
+  </ItemGroup>
+</Project>

@@ -49,7 +49,7 @@ RUN foreach ($dll in 'ddraw.dll', 'dsound.dll', 'glu32.dll', 'opengl32.dll', 'av
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
 ENV DOTNET_CLI_UI_LANGUAGE=en
 ARG BLENDER_SERIES=4.5
-COPY compose-unity.nuspec compose-unity.nuspec
+COPY windows/compose-unity.nuspec compose-unity.nuspec
 RUN $seriesMatch = [regex]::Match($env:BLENDER_SERIES, '^(?<major>\d+)\.(?<minor>\d+)$'); \
     if (-not $seriesMatch.Success) { throw "Invalid Blender series: $env:BLENDER_SERIES" }; \
     $nextSeries = '{0}.{1}' -f $seriesMatch.Groups['major'].Value, ([int]$seriesMatch.Groups['minor'].Value + 1); \
@@ -92,7 +92,7 @@ RUN $package = 'C:\net471-reference-assemblies.nupkg'; \
 
 # Use the supported Visual Studio 2019 servicing baseline because Visual Studio
 # 2022 MSBuild is incompatible with the .NET Framework build host used here.
-COPY WindowsBase C:/unity/WindowsBase
+COPY windows/WindowsBase C:/unity/WindowsBase
 RUN & 'C:\unity\WindowsBase\install.ps1'; \
     Remove-Item -LiteralPath C:\unity\WindowsBase -Recurse -Force
 
@@ -144,12 +144,12 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
 
 # Resume large Editor downloads after temporary CDN stalls and launch the
 # installer helper directly because Windows containers cannot display UAC.
-COPY patch-unity-hub.js C:/unity/patch-unity-hub.js
+COPY windows/patch-unity-hub.js C:/unity/patch-unity-hub.js
 RUN node C:\unity\patch-unity-hub.js; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to patch Unity Hub for Windows containers' }; \
     Remove-Item -Force C:\unity\patch-unity-hub.js
 
-COPY php-extensions.ini C:/tools/php82/compose-unity-extensions.ini
+COPY windows/php-extensions.ini C:/tools/php82/compose-unity-extensions.ini
 RUN Get-Content C:/tools/php82/compose-unity-extensions.ini | Add-Content -Path C:/tools/php82/php.ini
 
 RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender ' + $env:BLENDER_SERIES; \
@@ -180,7 +180,7 @@ RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender ' + $env:BL
 # reliably resolve associations on mounted paths or launch executables without
 # Explorer. Preserve every original export through a proxy and replace only
 # FindExecutableW and ShellExecuteExW with container-safe implementations.
-COPY Shell32Proxy C:/unity/Shell32Proxy
+COPY windows/Shell32Proxy C:/unity/Shell32Proxy
 RUN & 'C:\unity\Shell32Proxy\install.ps1'
 
 # Run both architectures in a fresh layer so KnownDLL resolution loads the
@@ -223,10 +223,10 @@ ENV UNITY_NO_GRAPHICS="1"
 
 # Windows containers cannot start Electron's sandboxed GPU process. Keep Unity's
 # documented CLI syntax externally and translate it before launching Hub.
-COPY ["Unity Hub.cs", "compose-unity.cs", "C:/unity/"]
+COPY ["windows/Unity Hub.cs", "C:/unity/Unity Hub.cs"]
+COPY common C:/unity/compose-unity
 RUN $project = 'C:\unity\launcher.csproj'; \
     $hubSource = 'C:\unity\Unity Hub.cs'; \
-    $composeSource = 'C:\unity\compose-unity.cs'; \
     $hubPublish = 'C:\unity\publish-hub'; \
     $composePublish = 'C:\unity\publish-compose'; \
     Set-Content -LiteralPath $project -Encoding UTF8 -Value @( \
@@ -247,8 +247,7 @@ RUN $project = 'C:\unity\launcher.csproj'; \
     ); \
     dotnet publish $project --nologo --configuration Release --output $hubPublish "-p:LauncherSource=$hubSource" -p:AssemblyName=unity-hub-launcher; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the Unity Hub launcher' }; \
-    Remove-Item -LiteralPath C:\unity\obj -Recurse -Force; \
-    dotnet publish $project --nologo --configuration Release --output $composePublish "-p:LauncherSource=$composeSource" -p:AssemblyName=compose-unity; \
+    dotnet publish C:\unity\compose-unity\ComposeUnity.csproj --nologo --configuration Release --output $composePublish -p:ComposeUnityTargetFramework=net9.0 -p:RuntimeIdentifier=win-x64; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the compose-unity launcher' }; \
     $hubArtifacts = @(Get-ChildItem -LiteralPath $hubPublish -File); \
     if ($hubArtifacts.Count -ne 1 -or $hubArtifacts[0].Name -ne 'unity-hub-launcher.exe') { throw 'Unity Hub launcher publish did not produce exactly one executable' }; \
@@ -257,9 +256,12 @@ RUN $project = 'C:\unity\launcher.csproj'; \
     $hub = 'C:\Program Files\Unity Hub\Unity Hub.exe'; \
     Move-Item -LiteralPath $hub -Destination 'C:\Program Files\Unity Hub\Unity Hub.real.exe'; \
     Move-Item -LiteralPath $hubArtifacts[0].FullName -Destination $hub; \
-    Move-Item -LiteralPath $composeArtifacts[0].FullName -Destination C:\Windows\compose-unity.exe; \
-    Remove-Item -LiteralPath $project, $hubSource, $composeSource -Force; \
-    Remove-Item -LiteralPath C:\unity\bin, C:\unity\obj, $hubPublish, $composePublish -Recurse -Force
+    Copy-Item -LiteralPath $composeArtifacts[0].FullName -Destination C:\Windows\compose-unity.exe; \
+    Copy-Item -LiteralPath $composeArtifacts[0].FullName -Destination C:\Windows\compose-unity-sidecar.exe; \
+    Remove-Item -LiteralPath $project, $hubSource -Force; \
+    Remove-Item -LiteralPath C:\unity\bin, C:\unity\obj, C:\unity\compose-unity, $hubPublish, $composePublish -Recurse -Force
+
+ENV COMPOSE_UNITY_CALL_TIMEOUT=86400
 
 ARG UNITY_TIMEOUT="14400"
 RUN compose-unity require slothsoft/unity; \
@@ -273,6 +275,12 @@ RUN compose-unity require slothsoft/unity; \
 RUN compose-unity exec unity-build; \
     if ($LASTEXITCODE -ne 0) { throw 'compose-unity unity-build smoke check failed' }; \
     compose-unity exec unity-help; \
-    if ($LASTEXITCODE -ne 0) { throw 'compose-unity unity-help smoke check failed' }
+    if ($LASTEXITCODE -ne 0) { throw 'compose-unity unity-help smoke check failed' }; \
+    Remove-Item -LiteralPath C:\ProgramData\compose-unity -Recurse -Force
 
 VOLUME ["C:/Program Files/Unity/Hub/Editor", "C:/Users/ContainerAdministrator/AppData/Roaming/Unity", "C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub", "C:/Users/ContainerAdministrator/AppData/Local/Unity", "C:/ProgramData/Unity"]
+
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD ["compose-unity-sidecar.exe", "health"]
+
+CMD ["compose-unity-sidecar.exe"]

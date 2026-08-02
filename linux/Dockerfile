@@ -4,7 +4,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 USER root
 
-COPY machine-id /etc/machine-id
+COPY linux/machine-id /etc/machine-id
 
 WORKDIR /var/workspace
 
@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         locales \
         nano \
         pciutils \
+        util-linux \
         wget \
         zip \
         unzip \
@@ -191,7 +192,25 @@ ENV UNITY_ACCELERATOR_ENDPOINT=""
 ENV UNITY_NO_GRAPHICS="1"
 
 COPY --chmod=755 --from=composer:2 /usr/bin/composer /usr/local/bin/composer
-COPY --chmod=755 compose-unity /usr/local/bin/
+COPY common /tmp/compose-unity
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in \
+      amd64) runtime_id="linux-x64" ;; \
+      arm64) runtime_id="linux-arm64" ;; \
+      *) echo "Unsupported architecture: $(dpkg --print-architecture)" >&2; exit 1 ;; \
+    esac; \
+    dotnet publish /tmp/compose-unity/ComposeUnity.csproj \
+        --nologo \
+        --configuration Release \
+        --output /tmp/compose-unity/publish \
+        -p:ComposeUnityTargetFramework=net8.0 \
+        -p:RuntimeIdentifier="$runtime_id"; \
+    test "$(find /tmp/compose-unity/publish -maxdepth 1 -type f | wc -l)" -eq 1; \
+    install -m 0755 /tmp/compose-unity/publish/compose-unity /usr/local/bin/compose-unity; \
+    install -m 0755 /tmp/compose-unity/publish/compose-unity /usr/local/bin/compose-unity-sidecar; \
+    rm -rf /tmp/compose-unity
+
+ENV COMPOSE_UNITY_CALL_TIMEOUT="86400"
 
 ARG UNITY_TIMEOUT="14400"
 RUN install -m 0755 -d /var/unity && \
@@ -201,6 +220,12 @@ RUN install -m 0755 -d /var/unity && \
 
 # Test
 RUN compose-unity exec unity-build && \
-    compose-unity exec unity-help
+    compose-unity exec unity-help && \
+    rm -rf /run/compose-unity
 
 VOLUME ["/root/Unity", "/root/.config/unity3d", "/root/.config/unityhub", "/root/.cache/Unity", "/root/.local/share/unity3d"]
+
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD ["compose-unity-sidecar", "health"]
+
+CMD ["compose-unity-sidecar"]
