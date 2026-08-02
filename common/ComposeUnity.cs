@@ -272,7 +272,7 @@ internal static class Program
             : string.Empty;
         var exit = lifecycleEvent.ExitCode.HasValue ? $" exit={lifecycleEvent.ExitCode.Value}" : string.Empty;
         var timeout = lifecycleEvent.TimeoutSeconds.HasValue
-            ? $" timeout={(lifecycleEvent.TimeoutSeconds.Value == 0 ? "disabled" : lifecycleEvent.TimeoutSeconds.Value + "s")}" 
+            ? $" timeout={(lifecycleEvent.TimeoutSeconds.Value == 0 ? "disabled" : lifecycleEvent.TimeoutSeconds.Value + "s")}"
             : string.Empty;
         var message = string.IsNullOrEmpty(lifecycleEvent.Message) ? string.Empty : $" message={SanitizeText(lifecycleEvent.Message, 160)}";
         Console.WriteLine($"{lifecycleEvent.Kind} id={lifecycleEvent.Id} pid={lifecycleEvent.Pid} command={lifecycleEvent.Command} cwd={lifecycleEvent.WorkingDirectory}{timeout}{exit}{duration}{message}");
