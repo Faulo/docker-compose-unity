@@ -170,19 +170,6 @@ RUN echo "deb https://security.debian.org/debian-security bullseye-security main
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# VNC Server
-ENV USER="root"
-ENV RESOLUTION="1920x1080"
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        dbus-x11 \
-        tightvncserver \
-        xfce4 \
-        xfce4-goodies \
-        xfonts-base && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
 # Farah
 ENV COMPOSE_UNITY="composer -d /var/unity"
 ENV COMPOSER_ALLOW_SUPERUSER="1"

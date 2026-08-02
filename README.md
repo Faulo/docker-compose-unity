@@ -16,7 +16,7 @@ Both image variants provide:
 - A .NET SDK.
 - Git, curl, and archive utilities.
 
-The Linux image additionally includes DocFX, Mono, Xvfb, XFCE, and a VNC server. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. Both Windows variants include the supported Visual Studio 2019 Build Tools servicing baseline. Visual Studio 2022 Build Tools are not used because their MSBuild assemblies are incompatible with the .NET Framework build host used by `dotnet format` and DocFX. Both variants also include native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
+The Linux image additionally includes DocFX, Mono, and Xvfb. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. Both Windows variants include the supported Visual Studio 2019 Build Tools servicing baseline. Visual Studio 2022 Build Tools are not used because their MSBuild assemblies are incompatible with the .NET Framework build host used by `dotnet format` and DocFX. Both variants also include native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
 
 ## Repository Layout
 
@@ -177,7 +177,7 @@ The named `unity-binaries` volume persists downloaded Unity editors:
 - Linux: `/root/Unity`
 - Windows: `C:/Program Files/Unity/Hub/Editor`
 
-The Dockerfiles also declare Unity, Unity Hub, cache, configuration, and licensing directories as volumes. The Linux image includes VNC tooling for interactive licensing setup.
+The Dockerfiles also declare Unity, Unity Hub, cache, configuration, and licensing directories as volumes.
 
 `linux/machine-id` supplies a stable Linux machine identity used by the image. Changes to that file, credential forwarding, editor paths, or licensing volumes can invalidate persisted licensing and should be made deliberately.
 
