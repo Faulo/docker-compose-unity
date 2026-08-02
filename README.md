@@ -53,6 +53,7 @@ DOCKER_IMAGE=compose-unity
 DOCKER_TEST_ARGS="--env UNITY_CREDENTIALS_USR --env UNITY_CREDENTIALS_PSW --env EMAIL_CREDENTIALS_USR --env EMAIL_CREDENTIALS_PSW"
 DOCKER_TEST_ARGS_LINUX="-v \"unity-binaries:/root/Unity\""
 DOCKER_TEST_ARGS_WINDOWS="-v \"unity-binaries:C:/Program Files/Unity/Hub/Editor\""
+DOCKER_TEST_ARGS_WINDOWS_GPU="--isolation process --device \"class/5B45201D-F2F2-4F3B-85BB-30FF1F953599\" --env UNITY_NO_GRAPHICS=0"
 DOCKER_TEST_CMD="compose-unity exec unity-empty-project test 2021.3.45f1"
 ```
 
@@ -62,6 +63,7 @@ The test configuration:
 
 - Forwards Unity and email credentials from the host environment.
 - Mounts the `unity-binaries` named volume at the platform-specific Unity editor directory.
+- Adds process isolation, DirectX device passthrough, and `UNITY_NO_GRAPHICS=0` when the Windows GPU profile is selected.
 - Creates an empty project using Unity `2021.3.45f1`.
 
 Credential values are forwarded at runtime and are not stored in `.env` or baked into the image.
@@ -75,6 +77,7 @@ docker-build-linux.bat
 docker-build-windows.bat
 docker-test-linux.bat
 docker-test-windows.bat
+docker-test-windows-gpu.bat
 ```
 
 They delegate to the shared scripts with `linux` or `windows` as the first argument. The shared scripts can also be called directly:
@@ -122,6 +125,50 @@ docker --context windows run --rm --env UNITY_CREDENTIALS_USR --env UNITY_CREDEN
 ```
 
 The batch scripts load the quoted values from `.env`, remove the surrounding quotes, and decode `\"` before passing the arguments to Docker.
+
+`docker-test-windows-gpu.bat` adds the Windows GPU profile from
+`DOCKER_TEST_ARGS_WINDOWS_GPU`. The `windows` context must target a host that
+can run the selected Windows image with process isolation and GPU passthrough.
+
+## Windows GPU Acceleration
+
+The Windows image defaults to `UNITY_NO_GRAPHICS=1` so it remains usable on
+GPU-less and Hyper-V-isolated hosts. Opt in to DirectX GPU acceleration by
+using process isolation, exposing the DirectX device interface class, and
+setting `UNITY_NO_GRAPHICS=0`:
+
+```text
+docker --context windows run --rm --isolation process `
+  --device "class/5B45201D-F2F2-4F3B-85BB-30FF1F953599" `
+  --env UNITY_NO_GRAPHICS=0 `
+  tmp/compose-unity:latest `
+  compose-unity exec unity-empty-project test 2021.3.45f1
+```
+
+Equivalent Compose service configuration:
+
+```yaml
+services:
+  compose-unity:
+    image: faulo/compose-unity:latest
+    isolation: process
+    environment:
+      UNITY_NO_GRAPHICS: 0
+    devices:
+      - "class/5B45201D-F2F2-4F3B-85BB-30FF1F953599"
+```
+
+The host and image must meet Microsoft's
+[Windows container GPU prerequisites](https://learn.microsoft.com/en-us/virtualization/windowscontainers/deploy-containers/gpu-acceleration),
+including compatible Windows versions, Docker 19.03 or newer, and a WDDM 2.5
+or newer display driver. GPU acceleration is unavailable with Hyper-V
+isolation. Process isolation also requires a host compatible with the selected
+`1809` or `20H2` image variant.
+
+A successful Unity launch logs `GfxDevice: creating device client` followed by
+the Direct3D version, hardware renderer, VRAM, and driver. Unity Editor system
+requirements still apply independently; newer Editor releases may not support
+the Windows versions used by these image variants.
 
 ## Volumes and Licensing
 
