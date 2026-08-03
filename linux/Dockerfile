@@ -156,6 +156,7 @@ RUN install -m 0755 -d /etc/apt/keyrings && \
         p7zip-full \
         python3 \
         unityhub=3.12.1 \
+        xauth \
         xvfb \
         xz-utils && \
     apt-get clean && \
