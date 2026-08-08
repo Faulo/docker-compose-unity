@@ -90,12 +90,13 @@ The Linux build script resolves to:
 docker --context linux build --tag tmp/compose-unity:latest --file linux/Dockerfile .
 ```
 
-The Linux image installs .NET SDK 9.0 by default. Override its feature version
-with the `DOTNET_VERSION` build argument; the selected value is also available
-as `DOTNET_VERSION` inside the resulting image:
+The Linux image installs Node.js 24 and .NET SDK 9.0 by default. Override their
+feature versions with the `NODE_VERSION` and `DOTNET_VERSION` build arguments;
+the selected values are also available under the same names inside the
+resulting image:
 
 ```text
-docker --context linux build --build-arg DOTNET_VERSION=9.0 --tag tmp/compose-unity:latest --file linux/Dockerfile .
+docker --context linux build --build-arg NODE_VERSION=24 --build-arg DOTNET_VERSION=9.0 --tag tmp/compose-unity:latest --file linux/Dockerfile .
 ```
 
 The Windows build script resolves to:
