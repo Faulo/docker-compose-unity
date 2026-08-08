@@ -1,3 +1,22 @@
+FROM debian:bookworm-slim AS steamcmd-installer
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Valve distributes the x64 client through a 32-bit self-updating bootstrapper.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl lib32gcc-s1 qemu-user; \
+    install -m 0755 -d /opt/steamcmd; \
+    curl -fsSL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" -o /tmp/steamcmd.tar.gz; \
+    tar -xzf /tmp/steamcmd.tar.gz -C /opt/steamcmd; \
+    rm -f /tmp/steamcmd.tar.gz; \
+    bootstrap_status=0; \
+    (cd /opt/steamcmd && DEBUGGER=qemu-i386 ./steamcmd.sh +quit) || bootstrap_status="$?"; \
+    case "$bootstrap_status" in 0|139) ;; *) exit "$bootstrap_status" ;; esac; \
+    test -x /opt/steamcmd/linux64/steamcmd; \
+    cd /opt/steamcmd; \
+    ./linux64/steamcmd +quit
+
 FROM debian:bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -65,15 +84,8 @@ RUN curl -fsSL "https://broth.itch.zone/butler/linux-amd64/LATEST/archive/defaul
     butler --help
 
 # Steam SDK
-RUN dpkg --add-architecture i386 && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends lib32gcc-s1 && \
-    curl -fsSL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" -o /tmp/steamcmd.tar.gz && \
-    tar -xzf /tmp/steamcmd.tar.gz -C /usr/local/bin && \
-    ln -sf /usr/local/bin/steamcmd.sh /usr/local/bin/steamcmd && \
-    rm -f /tmp/steamcmd.tar.gz && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
+COPY --from=steamcmd-installer /opt/steamcmd /opt/steamcmd
+RUN ln -s /opt/steamcmd/linux64/steamcmd /usr/local/bin/steamcmd && \
     steamcmd +quit
 
 # PHP
