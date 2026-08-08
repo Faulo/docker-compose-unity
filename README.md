@@ -90,6 +90,14 @@ The Linux build script resolves to:
 docker --context linux build --tag tmp/compose-unity:latest --file linux/Dockerfile .
 ```
 
+The Linux image installs .NET SDK 9.0 by default. Override its feature version
+with the `DOTNET_VERSION` build argument; the selected value is also available
+as `DOTNET_VERSION` inside the resulting image:
+
+```text
+docker --context linux build --build-arg DOTNET_VERSION=9.0 --tag tmp/compose-unity:latest --file linux/Dockerfile .
+```
+
 The Windows build script resolves to:
 
 ```text

@@ -91,6 +91,8 @@ RUN apt-get update && \
 	php --version
 
 # .NET SDK
+ARG DOTNET_VERSION=9.0
+ENV DOTNET_VERSION="${DOTNET_VERSION}"
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
 ENV DOTNET_CLI_UI_LANGUAGE=en
 ENV PATH="/root/.dotnet/tools:${PATH}"
@@ -98,10 +100,11 @@ RUN curl -fsSL https://packages.microsoft.com/config/debian/12/packages-microsof
     dpkg -i /tmp/packages-microsoft-prod.deb && \
     rm /tmp/packages-microsoft-prod.deb && \
     apt-get update && \
-    apt-get install -y --no-install-recommends dotnet-sdk-8.0 && \
+    apt-get install -y --no-install-recommends "dotnet-sdk-${DOTNET_VERSION}" && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
-    dotnet --version
+    dotnet --version && \
+    test "$(dotnet --version | cut -d. -f1-2)" = "$DOTNET_VERSION"
 
 # DocFX
 ENV FrameworkPathOverride="/usr/lib/mono/4.7.1-api/"
@@ -191,7 +194,7 @@ RUN set -eux; \
         --nologo \
         --configuration Release \
         --output /tmp/compose-unity/publish \
-        -p:ComposeUnityTargetFramework=net8.0 \
+        -p:ComposeUnityTargetFramework="net${DOTNET_VERSION}" \
         -p:RuntimeIdentifier="$runtime_id"; \
     test "$(find /tmp/compose-unity/publish -maxdepth 1 -type f | wc -l)" -eq 1; \
     install -m 0755 /tmp/compose-unity/publish/compose-unity /usr/local/bin/compose-unity; \
