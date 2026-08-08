@@ -11,9 +11,9 @@ Both image variants provide:
 - Node.js and npm.
 - The itch.io Butler client.
 - SteamCMD.
-- Blender, with its release series selected by the `BLENDER_SERIES` build argument.
-- PHP and Composer.
-- A .NET SDK.
+- Blender 4.5.
+- PHP 8.2 and Composer 2.
+- .NET SDK 9.
 - Git, curl, and archive utilities.
 
 The Linux image additionally includes DocFX, Mono, and Xvfb. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. Both Windows variants include the supported Visual Studio 2019 Build Tools servicing baseline. Visual Studio 2022 Build Tools are not used because their MSBuild assemblies are incompatible with the .NET Framework build host used by `dotnet format` and DocFX. Both variants also include native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
@@ -30,19 +30,10 @@ Both Docker builds use the repository root as build context. Both images create 
 
 ## Docker Contexts
 
-The local development setup uses two explicitly named Docker contexts:
+The local development setup assumes two explicitly named Docker contexts:
 
-- `linux` targets the Linux container host.
-- `windows` targets the Windows container host.
-
-Specify the context for direct Docker commands:
-
-```text
-docker --context linux info
-docker --context windows info
-```
-
-The first daemon must report `OSType: linux`; the second must report `OSType: windows`.
+- `linux` should point to a docker host running linux containers.
+- `windows` should point to a docker host running windows containers.
 
 ## Configuration
 
