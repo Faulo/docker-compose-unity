@@ -46,14 +46,21 @@ RUN foreach ($dll in 'ddraw.dll', 'dsound.dll', 'glu32.dll', 'opengl32.dll', 'av
     }
 
 # Tools
+ARG DOTNET_VERSION=9.0
+ENV DOTNET_VERSION="${DOTNET_VERSION}"
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
 ENV DOTNET_CLI_UI_LANGUAGE=en
+ENV PATH="C:\Users\ContainerAdministrator\.dotnet\tools;${PATH}"
 ARG BLENDER_SERIES=4.5
 COPY windows/compose-unity.nuspec compose-unity.nuspec
-RUN $seriesMatch = [regex]::Match($env:BLENDER_SERIES, '^(?<major>\d+)\.(?<minor>\d+)$'); \
+RUN if ($env:DOTNET_VERSION -notmatch '^\d+\.\d+$') { throw "Invalid .NET SDK feature version: $env:DOTNET_VERSION" }; \
+    $seriesMatch = [regex]::Match($env:BLENDER_SERIES, '^(?<major>\d+)\.(?<minor>\d+)$'); \
     if (-not $seriesMatch.Success) { throw "Invalid Blender series: $env:BLENDER_SERIES" }; \
     $nextSeries = '{0}.{1}' -f $seriesMatch.Groups['major'].Value, ([int]$seriesMatch.Groups['minor'].Value + 1); \
     [xml]$packageSpec = Get-Content -LiteralPath compose-unity.nuspec; \
+    $dotnetDependencies = @($packageSpec.package.metadata.dependencies.dependency | Where-Object id -like 'dotnet-*-sdk'); \
+    if ($dotnetDependencies.Count -ne 1) { throw "Expected one .NET SDK dependency, found $($dotnetDependencies.Count)" }; \
+    $dotnetDependencies[0].SetAttribute('id', 'dotnet-' + $env:DOTNET_VERSION + '-sdk'); \
     $blenderDependencies = @($packageSpec.package.metadata.dependencies.dependency | Where-Object id -eq 'blender'); \
     if ($blenderDependencies.Count -ne 1) { throw "Expected one Blender dependency, found $($blenderDependencies.Count)" }; \
     $blenderDependencies[0].SetAttribute('version', '[' + $env:BLENDER_SERIES + ',' + $nextSeries + ')'); \
@@ -62,8 +69,17 @@ RUN $seriesMatch = [regex]::Match($env:BLENDER_SERIES, '^(?<major>\d+)\.(?<minor
     if ($LASTEXITCODE -ne 0) { throw 'Failed to pack compose-unity' }; \
     choco install compose-unity --no-progress --yes --ignore-checksums --execution-timeout=7200 --source '.;https://community.chocolatey.org/api/v2/'; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to install compose-unity dependencies' }; \
+    $installedSdkVersion = dotnet --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to query the installed .NET SDK' }; \
+    if ($installedSdkVersion -notmatch ('^' + [regex]::Escape($env:DOTNET_VERSION) + '\.')) { throw "Unexpected .NET SDK version: $installedSdkVersion" }; \
     Remove-Item -Force *.nuspec; \
     Remove-Item -Force *.nupkg
+
+# DocFX
+RUN dotnet tool update --global docfx; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to install DocFX' }; \
+    docfx --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'DocFX smoke check failed' }
 
 # Unity-generated projects can target .NET Framework 4.7.1 even when a newer
 # runtime is installed. The Developer Pack installer hangs under Hyper-V
@@ -233,7 +249,7 @@ RUN $project = 'C:\unity\launcher.csproj'; \
         '<Project Sdk=''Microsoft.NET.Sdk''>', \
         '  <PropertyGroup>', \
         '    <OutputType>Exe</OutputType>', \
-        '    <TargetFramework>net9.0</TargetFramework>', \
+        "    <TargetFramework>net$env:DOTNET_VERSION</TargetFramework>", \
         '    <PublishSingleFile>true</PublishSingleFile>', \
         '    <SelfContained>false</SelfContained>', \
         '    <RuntimeIdentifier>win-x64</RuntimeIdentifier>', \
@@ -247,7 +263,7 @@ RUN $project = 'C:\unity\launcher.csproj'; \
     ); \
     dotnet publish $project --nologo --configuration Release --output $hubPublish "-p:LauncherSource=$hubSource" -p:AssemblyName=unity-hub-launcher; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the Unity Hub launcher' }; \
-    dotnet publish C:\unity\compose-unity\ComposeUnity.csproj --nologo --configuration Release --output $composePublish -p:ComposeUnityTargetFramework=net9.0 -p:RuntimeIdentifier=win-x64; \
+    dotnet publish C:\unity\compose-unity\ComposeUnity.csproj --nologo --configuration Release --output $composePublish "-p:ComposeUnityTargetFramework=net$env:DOTNET_VERSION" -p:RuntimeIdentifier=win-x64; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the compose-unity launcher' }; \
     $hubArtifacts = @(Get-ChildItem -LiteralPath $hubPublish -File); \
     if ($hubArtifacts.Count -ne 1 -or $hubArtifacts[0].Name -ne 'unity-hub-launcher.exe') { throw 'Unity Hub launcher publish did not produce exactly one executable' }; \

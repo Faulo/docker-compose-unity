@@ -14,9 +14,10 @@ Both image variants provide:
 - Blender 4.5.
 - PHP 8.2 and Composer 2.
 - .NET SDK 9.
+- DocFX.
 - Git, curl, and archive utilities.
 
-The Linux image additionally includes the x64 SteamCMD client, DocFX, and Xvfb. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. Both Windows variants include the supported Visual Studio 2019 Build Tools servicing baseline. Visual Studio 2022 Build Tools are not used because their MSBuild assemblies are incompatible with the .NET Framework build host used by `dotnet format` and DocFX. Both variants also include native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
+The Linux image additionally includes the x64 SteamCMD client and Xvfb. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. Both Windows variants include the supported Visual Studio 2019 Build Tools servicing baseline. Visual Studio 2022 Build Tools are not used because their MSBuild assemblies are incompatible with the .NET Framework build host used by `dotnet format` and DocFX. Both variants also include native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
 
 ## Repository Layout
 
@@ -103,6 +104,14 @@ The Windows build script resolves to:
 
 ```text
 docker --context windows build --tag tmp/compose-unity:latest --file windows/Dockerfile .
+```
+
+The Windows image installs .NET SDK 9.0 by default. Override its feature
+version with the `DOTNET_VERSION` build argument; the selected value is also
+available under the same name inside the resulting image:
+
+```text
+docker --context windows build --build-arg DOTNET_VERSION=9.0 --tag tmp/compose-unity:latest --file windows/Dockerfile .
 ```
 
 To build the Windows 20H2 variant explicitly, add `--build-arg OS_BASE=20H2`.
