@@ -123,12 +123,8 @@ RUN curl -fsSL https://packages.microsoft.com/config/debian/12/packages-microsof
     test "$(dotnet --version | cut -d. -f1-2)" = "$DOTNET_VERSION"
 
 # DocFX
-ENV FrameworkPathOverride="/usr/lib/mono/4.7.1-api/"
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends mono-devel && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    dotnet tool update -g docfx
+RUN dotnet tool update -g docfx && \
+    docfx --version
 
 # Blender
 ARG BLENDER_SERIES=4.5
