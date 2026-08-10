@@ -252,7 +252,7 @@ RUN $project = 'C:\unity\launcher.csproj'; \
         '<Project Sdk=''Microsoft.NET.Sdk''>', \
         '  <PropertyGroup>', \
         '    <OutputType>Exe</OutputType>', \
-        "    <TargetFramework>net$env:DOTNET_VERSION</TargetFramework>", \
+        ('    <TargetFramework>net' + $env:DOTNET_VERSION + '</TargetFramework>'), \
         '    <PublishSingleFile>true</PublishSingleFile>', \
         '    <SelfContained>false</SelfContained>', \
         '    <RuntimeIdentifier>win-x64</RuntimeIdentifier>', \
@@ -266,7 +266,7 @@ RUN $project = 'C:\unity\launcher.csproj'; \
     ); \
     dotnet publish $project --nologo --configuration Release --output $hubPublish "-p:LauncherSource=$hubSource" -p:AssemblyName=unity-hub-launcher; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the Unity Hub launcher' }; \
-    dotnet publish C:\unity\compose-unity\ComposeUnity.csproj --nologo --configuration Release --output $composePublish "-p:ComposeUnityTargetFramework=net$env:DOTNET_VERSION" -p:RuntimeIdentifier=win-x64; \
+    dotnet publish C:\unity\compose-unity\ComposeUnity.csproj --nologo --configuration Release --output $composePublish ('-p:ComposeUnityTargetFramework=net' + $env:DOTNET_VERSION) -p:RuntimeIdentifier=win-x64; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the compose-unity launcher' }; \
     $hubArtifacts = @(Get-ChildItem -LiteralPath $hubPublish -File); \
     if ($hubArtifacts.Count -ne 1 -or $hubArtifacts[0].Name -ne 'unity-hub-launcher.exe') { throw 'Unity Hub launcher publish did not produce exactly one executable' }; \
