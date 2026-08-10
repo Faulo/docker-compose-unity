@@ -68,11 +68,12 @@ RUN if ($env:DOTNET_VERSION -notmatch '^\d+\.\d+$') { throw "Invalid .NET SDK fe
     if ($LASTEXITCODE -ne 0) { throw 'Failed to pack compose-unity' }; \
     choco install compose-unity --no-progress --yes --ignore-checksums --execution-timeout=7200 --source '.;https://community.chocolatey.org/api/v2/'; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to install compose-unity dependencies' }; \
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
+    $env:PATH = $machinePath; \
     $installedSdkVersion = dotnet --version; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to query the installed .NET SDK' }; \
     if ($installedSdkVersion -notmatch ('^' + [regex]::Escape($env:DOTNET_VERSION) + '\.')) { throw "Unexpected .NET SDK version: $installedSdkVersion" }; \
     $dotnetToolsDirectory = Join-Path $env:USERPROFILE '.dotnet\tools'; \
-    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
     [Environment]::SetEnvironmentVariable('Path', $dotnetToolsDirectory + ';' + $machinePath, 'Machine'); \
     Remove-Item -Force *.nuspec; \
     Remove-Item -Force *.nupkg
