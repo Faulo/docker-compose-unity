@@ -50,7 +50,6 @@ ARG DOTNET_VERSION=9.0
 ENV DOTNET_VERSION="${DOTNET_VERSION}"
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
 ENV DOTNET_CLI_UI_LANGUAGE=en
-ENV PATH="C:\Users\ContainerAdministrator\.dotnet\tools;${PATH}"
 ARG BLENDER_SERIES=4.5
 COPY windows/compose-unity.nuspec compose-unity.nuspec
 RUN if ($env:DOTNET_VERSION -notmatch '^\d+\.\d+$') { throw "Invalid .NET SDK feature version: $env:DOTNET_VERSION" }; \
@@ -72,6 +71,9 @@ RUN if ($env:DOTNET_VERSION -notmatch '^\d+\.\d+$') { throw "Invalid .NET SDK fe
     $installedSdkVersion = dotnet --version; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to query the installed .NET SDK' }; \
     if ($installedSdkVersion -notmatch ('^' + [regex]::Escape($env:DOTNET_VERSION) + '\.')) { throw "Unexpected .NET SDK version: $installedSdkVersion" }; \
+    $dotnetToolsDirectory = Join-Path $env:USERPROFILE '.dotnet\tools'; \
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
+    [Environment]::SetEnvironmentVariable('Path', $dotnetToolsDirectory + ';' + $machinePath, 'Machine'); \
     Remove-Item -Force *.nuspec; \
     Remove-Item -Force *.nupkg
 
