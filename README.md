@@ -186,16 +186,16 @@ The named `unity-binaries` volume persists downloaded Unity editors:
 - Linux: `/root/Unity`
 - Windows: `C:/Program Files/Unity/Hub/Editor`
 
-SteamCMD login data and other per-user state can be persisted at:
+SteamCMD login configuration can be persisted at:
 
-- Linux: `/root/Steam`
-- Windows: `C:/ProgramData/chocolatey/lib/steamcmd/tools`
+- Linux: `/root/Steam/config`
+- Windows: `C:/ProgramData/chocolatey/lib/steamcmd/tools/config`
 
-The Windows SteamCMD Chocolatey package keeps its executable and generated
-`config`, `userdata`, and cache directories together, so the volume covers the
-package's entire tools directory. The Dockerfiles also declare Unity, Unity
-Hub, cache, configuration, licensing, and SteamCMD state directories as
-volumes.
+The SteamCMD login token is stored in `config/config.vdf`. Persisting only the
+`config` directory keeps the token between containers without masking the
+SteamCMD executable installed in the parent directory on Windows. The
+Dockerfiles also declare Unity, Unity Hub, cache, configuration, licensing,
+and SteamCMD configuration directories as volumes.
 
 `linux/machine-id` supplies a stable Linux machine identity used by the image. Changes to that file, credential forwarding, editor paths, or licensing volumes can invalidate persisted licensing and should be made deliberately.
 

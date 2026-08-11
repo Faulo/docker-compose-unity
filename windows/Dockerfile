@@ -297,7 +297,7 @@ RUN compose-unity exec unity-build; \
     if ($LASTEXITCODE -ne 0) { throw 'compose-unity unity-help smoke check failed' }; \
     Remove-Item -LiteralPath C:\ProgramData\compose-unity -Recurse -Force
 
-VOLUME ["C:/Program Files/Unity/Hub/Editor", "C:/ProgramData/chocolatey/lib/steamcmd/tools", "C:/Users/ContainerAdministrator/AppData/Roaming/Unity", "C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub", "C:/Users/ContainerAdministrator/AppData/Local/Unity", "C:/ProgramData/Unity"]
+VOLUME ["C:/Program Files/Unity/Hub/Editor", "C:/ProgramData/chocolatey/lib/steamcmd/tools/config", "C:/Users/ContainerAdministrator/AppData/Roaming/Unity", "C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub", "C:/Users/ContainerAdministrator/AppData/Local/Unity", "C:/ProgramData/Unity"]
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
     CMD ["compose-unity-sidecar.exe", "health"]
