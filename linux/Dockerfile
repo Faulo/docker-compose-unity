@@ -224,11 +224,6 @@ RUN install -m 0755 -d /var/unity && \
     compose-unity config process-timeout "$UNITY_TIMEOUT" && \
     compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative
 
-# Older Unity lines receive security releases missing from legacy symbol history.
-COPY common/patch-slothsoft-unity.js /tmp/patch-slothsoft-unity.js
-RUN node /tmp/patch-slothsoft-unity.js /var/unity/vendor/slothsoft/unity/src/UnityHub.php && \
-    rm /tmp/patch-slothsoft-unity.js
-
 # Test
 RUN compose-unity exec unity-build && \
     compose-unity exec unity-help && \

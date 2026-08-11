@@ -39,11 +39,6 @@ Build inputs are organized by ownership:
 
 Both Docker builds use the repository root as build context. Both images create their Composer project during the build, require `slothsoft/unity`, and configure the process timeout from `UNITY_TIMEOUT`.
 
-The images extend the bundled Unity editor resolver with Unity's official
-Release API. This allows security releases that are absent from Unity's legacy
-symbol history, including the latest 2019 LTS patch, to be installed by exact
-version through the normal `compose-unity` commands.
-
 ## Docker Contexts
 
 The local development setup assumes two explicitly named Docker contexts:

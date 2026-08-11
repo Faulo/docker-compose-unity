@@ -290,12 +290,6 @@ RUN compose-unity require slothsoft/unity; \
     compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to update compose-unity dependencies' }
 
-# Older Unity lines receive security releases missing from legacy symbol history.
-COPY common/patch-slothsoft-unity.js C:/unity/patch-slothsoft-unity.js
-RUN node C:\unity\patch-slothsoft-unity.js C:\unity\vendor\slothsoft\unity\src\UnityHub.php; \
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to patch the Unity release resolver' }; \
-    Remove-Item -Force C:\unity\patch-slothsoft-unity.js
-
 # Test
 RUN compose-unity exec unity-build; \
     if ($LASTEXITCODE -ne 0) { throw 'compose-unity unity-build smoke check failed' }; \
