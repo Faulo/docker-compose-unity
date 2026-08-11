@@ -17,7 +17,17 @@ Both image variants provide:
 - DocFX.
 - Git, curl, and archive utilities.
 
-The Linux image additionally includes the x64 SteamCMD client and Xvfb. The Windows image uses the full Windows container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE` build argument defaults to `1809` and also accepts `20H2`; the available .NET Framework runtime comes from the selected Windows base. Both Windows variants include the supported Visual Studio 2019 Build Tools servicing baseline. Visual Studio 2022 Build Tools are not used because their MSBuild assemblies are incompatible with the .NET Framework build host used by `dotnet format` and DocFX. Both variants also include native launchers for `compose-unity` and Unity Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe` directly for Unity's Blender-to-FBX import workflow.
+The Linux image additionally includes the x64 SteamCMD client, Xvfb, and ICU for
+the .NET-based Unity Licensing Client. The Windows image uses the full Windows
+container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE`
+build argument defaults to `1809` and also accepts `20H2`; the available .NET
+Framework runtime comes from the selected Windows base. Both Windows variants
+include the supported Visual Studio 2019 Build Tools servicing baseline. Visual
+Studio 2022 Build Tools are not used because their MSBuild assemblies are
+incompatible with the .NET Framework build host used by `dotnet format` and
+DocFX. Both variants also include native launchers for `compose-unity` and Unity
+Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe`
+directly for Unity's Blender-to-FBX import workflow.
 
 ## Repository Layout
 
@@ -28,6 +38,11 @@ Build inputs are organized by ownership:
 - `windows/` contains the Windows Dockerfile, Hub launcher and patch, Chocolatey package, and PHP extension configuration.
 
 Both Docker builds use the repository root as build context. Both images create their Composer project during the build, require `slothsoft/unity`, and configure the process timeout from `UNITY_TIMEOUT`.
+
+The images extend the bundled Unity editor resolver with Unity's official
+Release API. This allows security releases that are absent from Unity's legacy
+symbol history, including the latest 2019 LTS patch, to be installed by exact
+version through the normal `compose-unity` commands.
 
 ## Docker Contexts
 
@@ -46,7 +61,8 @@ DOCKER_TEST_ARGS="--env UNITY_CREDENTIALS_USR --env UNITY_CREDENTIALS_PSW --env 
 DOCKER_TEST_ARGS_LINUX="-v \"unity-binaries:/root/Unity\""
 DOCKER_TEST_ARGS_WINDOWS="-v \"unity-binaries:C:/Program Files/Unity/Hub/Editor\""
 DOCKER_TEST_ARGS_WINDOWS_GPU="--isolation process --device \"class/5B45201D-F2F2-4F3B-85BB-30FF1F953599\" --env UNITY_NO_GRAPHICS=0"
-DOCKER_TEST_CMD="compose-unity exec unity-empty-project test 2021.3.45f1"
+DOCKER_TEST_CMD="compose-unity exec unity-empty-project test"
+DOCKER_TEST_VERSIONS="2019.4.41f2 2020.3.49f1 2021.3.45f2 2022.3.62f3 6000.0.81f1"
 ```
 
 `DOCKER_IMAGE` names the image. Scripts tag the result as `tmp/compose-unity:latest`.
@@ -56,7 +72,11 @@ The test configuration:
 - Forwards Unity and email credentials from the host environment.
 - Mounts the `unity-binaries` named volume at the platform-specific Unity editor directory.
 - Adds process isolation, DirectX device passthrough, and `UNITY_NO_GRAPHICS=0` when the Windows GPU profile is selected.
-- Creates an empty project using Unity `2021.3.45f1`.
+- Creates an empty project with the latest pinned LTS patch from each major
+  Unity line starting with 2019: `2019.4.41f2`, `2020.3.49f1`,
+  `2021.3.45f2`, `2022.3.62f3`, and `6000.0.81f1`.
+- Runs the same version sequence on Linux and Windows and stops at the first
+  failed editor installation or project creation.
 
 Credential values are forwarded at runtime and are not stored in `.env` or baked into the image.
 
@@ -121,16 +141,16 @@ GitHub Actions publishes the Windows variants as `latest-windows-20H2` and
 Hyper-V-capable hosts prefer 20H2 while 1809 hosts fall back to their compatible
 image.
 
-The Linux test script reconstructs:
+For each version in `DOCKER_TEST_VERSIONS`, the Linux test script reconstructs:
 
 ```text
-docker --context linux run --rm --env UNITY_CREDENTIALS_USR --env UNITY_CREDENTIALS_PSW --env EMAIL_CREDENTIALS_USR --env EMAIL_CREDENTIALS_PSW -v "unity-binaries:/root/Unity" tmp/compose-unity:latest compose-unity exec unity-empty-project test 2021.3.45f1
+docker --context linux run --rm --env UNITY_CREDENTIALS_USR --env UNITY_CREDENTIALS_PSW --env EMAIL_CREDENTIALS_USR --env EMAIL_CREDENTIALS_PSW -v "unity-binaries:/root/Unity" tmp/compose-unity:latest compose-unity exec unity-empty-project test VERSION
 ```
 
-The Windows test script reconstructs:
+For each version in `DOCKER_TEST_VERSIONS`, the Windows test script reconstructs:
 
 ```text
-docker --context windows run --rm --env UNITY_CREDENTIALS_USR --env UNITY_CREDENTIALS_PSW --env EMAIL_CREDENTIALS_USR --env EMAIL_CREDENTIALS_PSW -v "unity-binaries:C:/Program Files/Unity/Hub/Editor" tmp/compose-unity:latest compose-unity exec unity-empty-project test 2021.3.45f1
+docker --context windows run --rm --env UNITY_CREDENTIALS_USR --env UNITY_CREDENTIALS_PSW --env EMAIL_CREDENTIALS_USR --env EMAIL_CREDENTIALS_PSW -v "unity-binaries:C:/Program Files/Unity/Hub/Editor" tmp/compose-unity:latest compose-unity exec unity-empty-project test VERSION
 ```
 
 The batch scripts load the quoted values from `.env`, remove the surrounding quotes, and decode `\"` before passing the arguments to Docker.
@@ -201,10 +221,11 @@ and SteamCMD configuration directories as volumes.
 
 ## Cross-Platform Command
 
-Both images expose the same `compose-unity` command:
+Both images expose the same `compose-unity` command, shown here with one of the
+pinned test versions:
 
 ```text
-compose-unity exec unity-empty-project test 2021.3.45f1
+compose-unity exec unity-empty-project test 2021.3.45f2
 ```
 
 Both images compile the shared C# source in `common/` into native launchers named `compose-unity` and `compose-unity-sidecar`. The launcher invokes Composer without an intermediate shell, preserves attached input, output, and exit status, and registers each call with the sidecar.

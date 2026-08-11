@@ -27,6 +27,7 @@ COPY linux/machine-id /etc/machine-id
 
 WORKDIR /var/workspace
 
+# Unity Licensing Client uses .NET globalization and fails fast without ICU.
 # Base tools + locale
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
@@ -55,14 +56,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libegl1 \
         libdbus-1-3 \
         libfontconfig1 \
-        libfreetype6 && \
+        libfreetype6 \
+        libicu72 && \
     echo "$LANG UTF-8" > /etc/locale.gen && \
     locale-gen "$LANG" && \
     install -m 0755 -d /etc/apt/keyrings && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     git config --global --add safe.directory * && \
-    curl --version
+    curl --version && \
+    ldconfig -p | grep -q 'libicuuc\.so'
 
 # NodeJS
 ARG NODE_VERSION=24
@@ -220,6 +223,11 @@ RUN install -m 0755 -d /var/unity && \
     compose-unity require slothsoft/unity && \
     compose-unity config process-timeout "$UNITY_TIMEOUT" && \
     compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative
+
+# Older Unity lines receive security releases missing from legacy symbol history.
+COPY common/patch-slothsoft-unity.js /tmp/patch-slothsoft-unity.js
+RUN node /tmp/patch-slothsoft-unity.js /var/unity/vendor/slothsoft/unity/src/UnityHub.php && \
+    rm /tmp/patch-slothsoft-unity.js
 
 # Test
 RUN compose-unity exec unity-build && \
