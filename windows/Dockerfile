@@ -283,7 +283,8 @@ RUN $project = 'C:\unity\launcher.csproj'; \
 ENV COMPOSE_UNITY_CALL_TIMEOUT=86400
 
 ARG UNITY_TIMEOUT="14400"
-RUN compose-unity require slothsoft/unity; \
+ARG SLOTHSOFT_UNITY_VERSION=2.21
+RUN compose-unity require ('slothsoft/unity:^' + $env:SLOTHSOFT_UNITY_VERSION); \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to require slothsoft/unity' }; \
     compose-unity config process-timeout $env:UNITY_TIMEOUT; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to configure the Composer process timeout' }; \

@@ -219,8 +219,9 @@ RUN set -eux; \
 ENV COMPOSE_UNITY_CALL_TIMEOUT="86400"
 
 ARG UNITY_TIMEOUT="14400"
+ARG SLOTHSOFT_UNITY_VERSION=2.21
 RUN install -m 0755 -d /var/unity && \
-    compose-unity require slothsoft/unity && \
+    compose-unity require "slothsoft/unity:^${SLOTHSOFT_UNITY_VERSION}" && \
     compose-unity config process-timeout "$UNITY_TIMEOUT" && \
     compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative
 

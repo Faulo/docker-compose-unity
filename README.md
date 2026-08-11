@@ -39,6 +39,10 @@ Build inputs are organized by ownership:
 
 Both Docker builds use the repository root as build context. Both images create their Composer project during the build, require `slothsoft/unity`, and configure the process timeout from `UNITY_TIMEOUT`.
 
+Both images default `SLOTHSOFT_UNITY_VERSION` to `2.21` and require the
+corresponding compatible Composer release range, `^2.21`. Override the build
+argument to select a different compatible minor release.
+
 ## Docker Contexts
 
 The local development setup assumes two explicitly named Docker contexts:
@@ -106,13 +110,13 @@ The Linux build script resolves to:
 docker --context linux build --tag tmp/compose-unity:latest --file linux/Dockerfile .
 ```
 
-The Linux image installs Node.js 24 and .NET SDK 9.0 by default. Override their
-feature versions with the `NODE_VERSION` and `DOTNET_VERSION` build arguments;
-the selected values are also available under the same names inside the
-resulting image:
+The Linux image installs Node.js 24, .NET SDK 9.0, and `slothsoft/unity ^2.21`
+by default. Override them with the `NODE_VERSION`, `DOTNET_VERSION`, and
+`SLOTHSOFT_UNITY_VERSION` build arguments; the Node.js and .NET selections are
+also available under the same names inside the resulting image:
 
 ```text
-docker --context linux build --build-arg NODE_VERSION=24 --build-arg DOTNET_VERSION=9.0 --tag tmp/compose-unity:latest --file linux/Dockerfile .
+docker --context linux build --build-arg NODE_VERSION=24 --build-arg DOTNET_VERSION=9.0 --build-arg SLOTHSOFT_UNITY_VERSION=2.21 --tag tmp/compose-unity:latest --file linux/Dockerfile .
 ```
 
 The Windows build script resolves to:
@@ -121,12 +125,13 @@ The Windows build script resolves to:
 docker --context windows build --tag tmp/compose-unity:latest --file windows/Dockerfile .
 ```
 
-The Windows image installs .NET SDK 9.0 by default. Override its feature
-version with the `DOTNET_VERSION` build argument; the selected value is also
-available under the same name inside the resulting image:
+The Windows image installs .NET SDK 9.0 and `slothsoft/unity ^2.21` by default.
+Override them with the `DOTNET_VERSION` and `SLOTHSOFT_UNITY_VERSION` build
+arguments; the .NET selection is also available under the same name inside the
+resulting image:
 
 ```text
-docker --context windows build --build-arg DOTNET_VERSION=9.0 --tag tmp/compose-unity:latest --file windows/Dockerfile .
+docker --context windows build --build-arg DOTNET_VERSION=9.0 --build-arg SLOTHSOFT_UNITY_VERSION=2.21 --tag tmp/compose-unity:latest --file windows/Dockerfile .
 ```
 
 To build the Windows 20H2 variant explicitly, add `--build-arg OS_BASE=20H2`.
