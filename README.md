@@ -290,3 +290,9 @@ Windows containers do not provide the interactive desktop shell expected by
 exports while resolving registered file associations through `SHLWAPI` and
 launching executables through `CreateProcessW`. The original Microsoft DLLs
 remain beside the proxies as `shell32real.dll` and handle all other shell APIs.
+During the image build, each original DLL must have a valid Microsoft signature,
+match the selected Windows build family and architecture, and expose exactly the
+ordinal/name map expected by its proxy. This permits compatible monthly Windows
+servicing updates without maintaining hashes for Microsoft binaries while still
+rejecting tampered or export-incompatible replacements. The checked-in proxy
+binaries remain protected by exact SHA-256 checksums.

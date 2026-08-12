@@ -13,6 +13,8 @@ $sysWow64 = 'C:\Windows\SysWOW64\shell32.dll'
 $sysWow64Real = 'C:\Windows\SysWOW64\shell32real.dll'
 $proxyX64 = Join-Path $variantDirectory 'shell32-proxy-x64.dll'
 $proxyX86 = Join-Path $variantDirectory 'shell32-proxy-x86.dll'
+$exportsX64 = Join-Path $variantDirectory 'shell32-exports-x64.rsp'
+$exportsX86 = Join-Path $variantDirectory 'shell32-exports-x86.rsp'
 $hashManifest = Join-Path $variantDirectory 'shell32-hashes.psd1'
 if (-not (Test-Path -LiteralPath $hashManifest -PathType Leaf)) {
     throw "Unsupported Windows OS base: $OsBase"
@@ -20,8 +22,6 @@ if (-not (Test-Path -LiteralPath $hashManifest -PathType Leaf)) {
 $hashes = Import-PowerShellDataFile -LiteralPath $hashManifest
 
 $expectedHashes = @{
-    $system32 = $hashes.System32
-    $sysWow64 = $hashes.SysWow64
     $proxyX64 = $hashes.ProxyX64
     $proxyX86 = $hashes.ProxyX86
 }
@@ -31,6 +31,13 @@ foreach ($path in $expectedHashes.Keys) {
         throw "Unexpected SHELL32 artifact hash for $path`: $actualHash"
     }
 }
+
+& (Join-Path $PSScriptRoot 'validate.ps1') -OriginalPath $system32 `
+    -ExpectedMachine 0x8664 -ExpectedFileBuilds $hashes.FileBuilds `
+    -ExportManifest $exportsX64
+& (Join-Path $PSScriptRoot 'validate.ps1') -OriginalPath $sysWow64 `
+    -ExpectedMachine 0x014C -ExpectedFileBuilds $hashes.FileBuilds `
+    -ExportManifest $exportsX86
 
 foreach ($replacement in @(
     @{ Original = $system32; Real = $system32Real; Proxy = $proxyX64 },

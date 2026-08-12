@@ -8,7 +8,7 @@ SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell", "-ExecutionPolic
 WORKDIR C:/unity
 
 # The selectable full Windows base supplies the desktop WinRT classes required
-# by Unity. Shell compatibility artifacts below are tied to each OS build.
+# by Unity. Shell compatibility artifacts below are validated per OS family.
 ENV COMPLUS_RUNNING_IN_CONTAINER=1
 ENV COMPLUS_NGenProtectedProcess_FeatureEnabled=0
 RUN $policyKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; \
