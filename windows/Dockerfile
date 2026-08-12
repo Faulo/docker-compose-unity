@@ -298,6 +298,24 @@ RUN compose-unity exec unity-build; \
     if ($LASTEXITCODE -ne 0) { throw 'compose-unity unity-help smoke check failed' }; \
     Remove-Item -LiteralPath C:\ProgramData\compose-unity -Recurse -Force
 
+ARG POWERSHELL_VERSION=7.6.4
+ARG POWERSHELL_SHA256=80832551c52809301e6071c8bac977beb5a2f1ec953eb4db9f94deb953333793
+# The ZIP package works in Windows containers and avoids installer side effects.
+RUN $archive = 'C:\powershell.zip'; \
+    $uri = 'https://github.com/PowerShell/PowerShell/releases/download/v' + $env:POWERSHELL_VERSION + '/PowerShell-' + $env:POWERSHELL_VERSION + '-win-x64.zip'; \
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
+    (New-Object Net.WebClient).DownloadFile($uri, $archive); \
+    $actualHash = (Get-FileHash -Algorithm SHA256 $archive).Hash; \
+    if ($actualHash -ne $env:POWERSHELL_SHA256) { throw "PowerShell package checksum mismatch: $actualHash" }; \
+    $destination = 'C:\Program Files\PowerShell\7'; \
+    New-Item -ItemType Directory -Force $destination | Out-Null; \
+    Expand-Archive -LiteralPath $archive -DestinationPath $destination; \
+    Remove-Item -LiteralPath $archive; \
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
+    [Environment]::SetEnvironmentVariable('Path', $destination + ';' + $machinePath, 'Machine'); \
+    & "$destination\pwsh.exe" -NoLogo -NoProfile -Command 'if ($PSVersionTable.PSVersion.ToString() -ne $env:POWERSHELL_VERSION) { exit 1 }'; \
+    if ($LASTEXITCODE -ne 0) { throw 'PowerShell smoke check failed' }
+
 VOLUME ["C:/Program Files/Unity/Hub/Editor", "C:/ProgramData/chocolatey/lib/steamcmd/tools/config", "C:/Users/ContainerAdministrator/AppData/Roaming/Unity", "C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub", "C:/Users/ContainerAdministrator/AppData/Local/Unity", "C:/ProgramData/Unity"]
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
