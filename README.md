@@ -17,7 +17,9 @@ Both image variants provide:
 - DocFX.
 - Git, curl, and archive utilities.
 
-The Windows image additionally provides PowerShell 7.6.4 as `pwsh`.
+The Windows image additionally provides PowerShell 7.6.4 as `pwsh` and the
+Visual C++ 2010, 2013, and 2015-2022 runtimes required by Unity's native editor
+libraries.
 
 The Linux image additionally includes the x64 SteamCMD client, Xvfb, and ICU for
 the .NET-based Unity Licensing Client. The Windows image uses the full Windows
