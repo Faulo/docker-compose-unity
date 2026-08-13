@@ -14,7 +14,6 @@
       <dependency id="nodejs" />
       <dependency id="blender" />
       <dependency id="butler" />
-      <dependency id="steamcmd" />
       <dependency id="vcredist2010" />
       <dependency id="vcredist2013" />
       <dependency id="vcredist140" />

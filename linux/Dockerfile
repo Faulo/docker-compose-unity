@@ -230,7 +230,7 @@ RUN compose-unity exec unity-build && \
     compose-unity exec unity-help && \
     rm -rf /run/compose-unity
 
-VOLUME ["/root/Unity", "/root/Steam/config", "/root/.config/unity3d", "/root/.config/unityhub", "/root/.cache/Unity", "/root/.local/share/unity3d"]
+VOLUME ["/root/Unity", "/root/Steam", "/root/.config/unity3d", "/root/.config/unityhub", "/root/.cache/Unity", "/root/.local/share/unity3d"]
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
     CMD ["compose-unity-sidecar", "health"]

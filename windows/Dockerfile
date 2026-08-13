@@ -243,10 +243,13 @@ ENV UNITY_NO_GRAPHICS="1"
 # Windows containers cannot start Electron's sandboxed GPU process. Keep Unity's
 # documented CLI syntax externally and translate it before launching Hub.
 COPY ["windows/Unity Hub.cs", "C:/unity/Unity Hub.cs"]
+COPY ["windows/SteamCmd.cs", "C:/unity/SteamCmd.cs"]
 COPY common C:/unity/compose-unity
 RUN $project = 'C:\unity\launcher.csproj'; \
     $hubSource = 'C:\unity\Unity Hub.cs'; \
+    $steamCmdSource = 'C:\unity\SteamCmd.cs'; \
     $hubPublish = 'C:\unity\publish-hub'; \
+    $steamCmdPublish = 'C:\unity\publish-steamcmd'; \
     $composePublish = 'C:\unity\publish-compose'; \
     Set-Content -LiteralPath $project -Encoding UTF8 -Value @( \
         '<Project Sdk=''Microsoft.NET.Sdk''>', \
@@ -266,19 +269,41 @@ RUN $project = 'C:\unity\launcher.csproj'; \
     ); \
     dotnet publish $project --nologo --configuration Release --output $hubPublish "-p:LauncherSource=$hubSource" -p:AssemblyName=unity-hub-launcher; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the Unity Hub launcher' }; \
+    dotnet publish $project --nologo --configuration Release --output $steamCmdPublish "-p:LauncherSource=$steamCmdSource" -p:AssemblyName=steamcmd; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the SteamCMD launcher' }; \
     dotnet publish C:\unity\compose-unity\ComposeUnity.csproj --nologo --configuration Release --output $composePublish ('-p:ComposeUnityTargetFramework=net' + $env:DOTNET_VERSION) -p:RuntimeIdentifier=win-x64; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the compose-unity launcher' }; \
     $hubArtifacts = @(Get-ChildItem -LiteralPath $hubPublish -File); \
     if ($hubArtifacts.Count -ne 1 -or $hubArtifacts[0].Name -ne 'unity-hub-launcher.exe') { throw 'Unity Hub launcher publish did not produce exactly one executable' }; \
+    $steamCmdArtifacts = @(Get-ChildItem -LiteralPath $steamCmdPublish -File); \
+    if ($steamCmdArtifacts.Count -ne 1 -or $steamCmdArtifacts[0].Name -ne 'steamcmd.exe') { throw 'SteamCMD launcher publish did not produce exactly one executable' }; \
     $composeArtifacts = @(Get-ChildItem -LiteralPath $composePublish -File); \
     if ($composeArtifacts.Count -ne 1 -or $composeArtifacts[0].Name -ne 'compose-unity.exe') { throw 'compose-unity launcher publish did not produce exactly one executable' }; \
     $hub = 'C:\Program Files\Unity Hub\Unity Hub.exe'; \
     Move-Item -LiteralPath $hub -Destination 'C:\Program Files\Unity Hub\Unity Hub.real.exe'; \
     Move-Item -LiteralPath $hubArtifacts[0].FullName -Destination $hub; \
+    New-Item -ItemType Directory -Path C:\steamcmd | Out-Null; \
+    Move-Item -LiteralPath $steamCmdArtifacts[0].FullName -Destination C:\steamcmd\steamcmd.exe; \
     Copy-Item -LiteralPath $composeArtifacts[0].FullName -Destination C:\Windows\compose-unity.exe; \
     Copy-Item -LiteralPath $composeArtifacts[0].FullName -Destination C:\Windows\compose-unity-sidecar.exe; \
-    Remove-Item -LiteralPath $project, $hubSource -Force; \
-    Remove-Item -LiteralPath C:\unity\bin, C:\unity\obj, C:\unity\compose-unity, $hubPublish, $composePublish -Recurse -Force
+    Remove-Item -LiteralPath $project, $hubSource, $steamCmdSource -Force; \
+    Remove-Item -LiteralPath C:\unity\bin, C:\unity\obj, C:\unity\compose-unity, $hubPublish, $steamCmdPublish, $composePublish -Recurse -Force
+
+ARG STEAMCMD_SHA256=7669B170DEE42DB8EE2273775ED7DFB2D173BDBA1B849F70D2C7B379290BCE13
+RUN $archive = 'C:\steamcmd.zip'; \
+    Invoke-WebRequest -Uri 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip' -OutFile $archive; \
+    $actualHash = (Get-FileHash -Algorithm SHA256 $archive).Hash; \
+    if ($actualHash -ne $env:STEAMCMD_SHA256) { throw "SteamCMD archive checksum mismatch: $actualHash" }; \
+    $extractRoot = 'C:\steamcmd-installer'; \
+    Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot; \
+    $installer = Join-Path $extractRoot 'steamcmd.exe'; \
+    $installerFiles = @(Get-ChildItem -LiteralPath $extractRoot -File -Recurse); \
+    if ($installerFiles.Count -ne 1 -or $installerFiles[0].FullName -ne $installer) { throw 'Unexpected SteamCMD archive contents' }; \
+    Move-Item -LiteralPath $installer -Destination C:\steamcmd\steamcmd-installer.exe; \
+    Remove-Item -LiteralPath $archive, $extractRoot -Recurse -Force; \
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
+    [Environment]::SetEnvironmentVariable('Path', 'C:\steamcmd;' + $machinePath, 'Machine'); \
+    if (Test-Path -LiteralPath C:\steam) { throw 'SteamCMD volume directory must not be populated in the image' }
 
 ENV COMPOSE_UNITY_CALL_TIMEOUT=86400
 
@@ -316,7 +341,7 @@ RUN $archive = 'C:\powershell.zip'; \
     & "$destination\pwsh.exe" -NoLogo -NoProfile -Command 'if ($PSVersionTable.PSVersion.ToString() -ne $env:POWERSHELL_VERSION) { exit 1 }'; \
     if ($LASTEXITCODE -ne 0) { throw 'PowerShell smoke check failed' }
 
-VOLUME ["C:/Program Files/Unity/Hub/Editor", "C:/ProgramData/chocolatey/lib/steamcmd/tools/config", "C:/Users/ContainerAdministrator/AppData/Roaming/Unity", "C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub", "C:/Users/ContainerAdministrator/AppData/Local/Unity", "C:/ProgramData/Unity"]
+VOLUME ["C:/Program Files/Unity/Hub/Editor", "C:/steam", "C:/Users/ContainerAdministrator/AppData/Roaming/Unity", "C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub", "C:/Users/ContainerAdministrator/AppData/Local/Unity", "C:/ProgramData/Unity"]
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
     CMD ["compose-unity-sidecar.exe", "health"]
