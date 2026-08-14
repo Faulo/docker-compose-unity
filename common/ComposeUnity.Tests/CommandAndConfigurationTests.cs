@@ -37,13 +37,20 @@ public sealed class CommandAndConfigurationTests {
     }
 
     [Test]
-    public void UsesToolInstallationDirectoryForComposer() {
+    public void SelectsInstalledComposerProjectWithoutChangingWorkingDirectory() {
         var startInfo = Program.ComposerStartInfo(["--version"]);
         string[] arguments = startInfo.ArgumentList.ToArray();
 
-        Assert.That(arguments, Does.Contain(OperatingSystem.IsWindows()
-            ? @"C:\compose-unity"
-            : "/compose-unity"));
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(startInfo.Environment["COMPOSER"], Is.EqualTo(OperatingSystem.IsWindows()
+                ? @"C:\compose-unity\composer.json"
+                : "/compose-unity/composer.json"));
+            Assert.That(startInfo.WorkingDirectory, Is.EqualTo(Environment.CurrentDirectory));
+            Assert.That(arguments, Does.Not.Contain("-d"));
+            Assert.That(arguments, Does.Not.Contain(OperatingSystem.IsWindows()
+                ? @"C:\compose-unity"
+                : "/compose-unity"));
+        }
     }
 
     [TestCase(null, false, false)]

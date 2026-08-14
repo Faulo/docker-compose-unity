@@ -135,6 +135,36 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     }
 
     [Test]
+    public async Task NativeLauncherPreservesWorkingDirectory() {
+        string workingDirectory = expectedOs == "windows" ? @"C:\Windows\Temp" : "/tmp";
+        string executable = expectedOs == "windows"
+            ? @"C:\Windows\compose-unity-controller.exe"
+            : "/usr/local/bin/compose-unity-controller";
+        var invocation = await RunDockerAsync([
+            "exec",
+            "--workdir",
+            workingDirectory,
+            container,
+            executable,
+            "exec",
+            "unity-command",
+            "--",
+            "method",
+            workingDirectory,
+            "DaemonTests.Arguments",
+            "--"
+        ], TimeSpan.FromSeconds(30));
+        Assert.That(invocation.exitCode, Is.EqualTo(7), invocation.standardError);
+        var backend = JsonNode.Parse(invocation.standardOutput)!;
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(backend["workingDirectory"]!.GetValue<string>(), Is.EqualTo(workingDirectory));
+            Assert.That(backend["composerProject"]!.GetValue<string>(), Is.EqualTo(expectedOs == "windows"
+                ? @"C:\compose-unity\composer.json"
+                : "/compose-unity/composer.json"));
+        }
+    }
+
+    [Test]
     public async Task ReusesWorkerAndMountsOnlyProjectDirectories() {
         await ExecuteMethodAsync("DaemonTests.First");
         string workerBefore = await SingleWorkerAsync();

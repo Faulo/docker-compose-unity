@@ -231,7 +231,7 @@ RUN git config --global --add safe.directory *; \
     if ($LASTEXITCODE -ne 0) { throw '.NET smoke check failed' }
 
 # Farah
-ENV COMPOSE_UNITY="composer -d C:/compose-unity"
+ENV COMPOSE_UNITY="compose-unity"
 ENV COMPOSER_ALLOW_SUPERUSER="1"
 
 ENV UNITY_LOGGING="stdin stdout stderr"

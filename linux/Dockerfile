@@ -190,7 +190,7 @@ RUN echo "deb https://security.debian.org/debian-security bullseye-security main
     rm -rf /var/lib/apt/lists/*
 
 # Farah
-ENV COMPOSE_UNITY="composer -d /compose-unity"
+ENV COMPOSE_UNITY="compose-unity"
 ENV COMPOSER_ALLOW_SUPERUSER="1"
 
 ENV UNITY_LOGGING="stdin stdout stderr"

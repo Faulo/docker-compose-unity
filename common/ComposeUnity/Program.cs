@@ -366,19 +366,19 @@ static class Program {
 
     static ProcessStartInfo ComposerStartInfo(bool redirectOutput) {
         ProcessStartInfo startInfo;
+        string composerProject;
         if (OperatingSystem.IsWindows()) {
             startInfo = new ProcessStartInfo("php.exe");
             startInfo.ArgumentList.Add(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                 "ComposerSetup", "bin", "composer.phar"));
-            startInfo.ArgumentList.Add("-d");
-            startInfo.ArgumentList.Add(@"C:\compose-unity");
+            composerProject = @"C:\compose-unity\composer.json";
         } else {
             startInfo = new ProcessStartInfo("composer");
-            startInfo.ArgumentList.Add("-d");
-            startInfo.ArgumentList.Add("/compose-unity");
+            composerProject = "/compose-unity/composer.json";
         }
 
+        startInfo.Environment["COMPOSER"] = composerProject;
         startInfo.WorkingDirectory = Environment.CurrentDirectory;
         startInfo.UseShellExecute = false;
         startInfo.RedirectStandardOutput = redirectOutput;
@@ -707,7 +707,14 @@ static class UnixProcessTree {
     static extern int kill(int pid, int signal);
 
     internal static ChildProcess Start(ProcessStartInfo composer) {
-        var startInfo = new ProcessStartInfo("/usr/bin/setsid") { UseShellExecute = false };
+        var startInfo = new ProcessStartInfo("/usr/bin/setsid") {
+            UseShellExecute = false,
+            WorkingDirectory = composer.WorkingDirectory
+        };
+        startInfo.Environment.Clear();
+        foreach (var variable in composer.Environment) {
+            startInfo.Environment[variable.Key] = variable.Value;
+        }
         startInfo.ArgumentList.Add("--wait");
         startInfo.ArgumentList.Add(composer.FileName);
         foreach (string argument in composer.ArgumentList) {
@@ -748,6 +755,7 @@ static class UnixProcessTree {
 static class WindowsProcessTree {
     const uint CREATE_SUSPENDED = 0x00000004;
     const uint CREATE_NEW_PROCESS_GROUP = 0x00000200;
+    const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     const uint STARTF_USE_STD_HANDLES = 0x00000100;
     const uint JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS = 9;
     const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
@@ -815,10 +823,16 @@ static class WindowsProcessTree {
                 standardError = GetStdHandle(STD_ERROR_HANDLE)
             };
             var commandLine = new StringBuilder(BuildCommandLine(startInfo));
-            if (!CreateProcess(null, commandLine, IntPtr.Zero, IntPtr.Zero, true,
-                    CREATE_SUSPENDED | CREATE_NEW_PROCESS_GROUP, IntPtr.Zero, startInfo.WorkingDirectory,
-                    ref startupInfo, out var processInformation)) {
-                throw NativeError("Failed to create suspended Composer process");
+            IntPtr environment = Marshal.StringToHGlobalUni(BuildEnvironmentBlock(startInfo));
+            ProcessInformation processInformation;
+            try {
+                if (!CreateProcess(null, commandLine, IntPtr.Zero, IntPtr.Zero, true,
+                        CREATE_SUSPENDED | CREATE_NEW_PROCESS_GROUP | CREATE_UNICODE_ENVIRONMENT,
+                        environment, startInfo.WorkingDirectory, ref startupInfo, out processInformation)) {
+                    throw NativeError("Failed to create suspended Composer process");
+                }
+            } finally {
+                Marshal.FreeHGlobal(environment);
             }
 
             if (!AssignProcessToJobObject(job, processInformation.process)) {
@@ -891,6 +905,11 @@ static class WindowsProcessTree {
         values.AddRange(startInfo.ArgumentList);
         return string.Join(" ", values.Select(QuoteArgument));
     }
+
+    static string BuildEnvironmentBlock(ProcessStartInfo startInfo) =>
+        string.Join('\0', startInfo.Environment
+            .OrderBy(variable => variable.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(variable => $"{variable.Key}={variable.Value}")) + "\0\0";
 
     static string QuoteArgument(string argument) {
         if (argument.Length > 0 && !argument.Any(character => char.IsWhiteSpace(character) || character == '"')) {

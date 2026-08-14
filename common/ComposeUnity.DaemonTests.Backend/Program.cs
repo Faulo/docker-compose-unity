@@ -8,6 +8,12 @@ if (args.Contains("--version", StringComparer.Ordinal)) {
     return 0;
 }
 
+int workingDirectoryOption = Array.IndexOf(args, "-d");
+if (workingDirectoryOption >= 0 && workingDirectoryOption + 1 < args.Length) {
+    Directory.CreateDirectory(args[workingDirectoryOption + 1]);
+    Environment.CurrentDirectory = args[workingDirectoryOption + 1];
+}
+
 if (args.Length == 3 && args[0] == "sidecar" && args[1] == "probe-project") {
     return runControllerProbe(args[2]);
 }
@@ -72,7 +78,9 @@ static int executeMethod(string[] command) {
 
     Console.WriteLine(JsonSerializer.Serialize(new {
         method = command[2],
-        arguments = values
+        arguments = values,
+        workingDirectory = Environment.CurrentDirectory,
+        composerProject = Environment.GetEnvironmentVariable("COMPOSER")
     }));
     Console.Error.WriteLine("daemon-test stderr");
     return 7;

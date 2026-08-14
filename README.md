@@ -244,8 +244,12 @@ compose-unity exec unity-empty-project test 2021.3.45f2
 
 Both images compile the shared C# source in `common/ComposeUnity/` into one
 canonical native launcher named `compose-unity`. The launcher invokes Composer
-without an intermediate shell, preserves attached input, output, and exit
-status, and registers each call with the sidecar.
+without an intermediate shell, selects the installed
+`/compose-unity/composer.json` or `C:\compose-unity\composer.json` through
+Composer's `COMPOSER` environment variable, preserves the caller's working
+directory, attached input, output, and exit status, and registers each call
+with the sidecar. The image-level `COMPOSE_UNITY` command points to this native
+launcher as well.
 
 ## Long-Running Sidecar
 
