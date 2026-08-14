@@ -257,9 +257,9 @@ For example, Codex MCP configuration uses the same IP and port published by the
 container:
 
 ```toml
-[mcp_servers.unity]
+[mcp_servers.compose-unity]
 url = "http://127.0.0.1:3310/mcp"
-tool_timeout_sec = 1800
+tool_timeout_sec = 7200
 ```
 
 The server advertises exactly four tools:
