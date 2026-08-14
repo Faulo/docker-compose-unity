@@ -7,3 +7,5 @@
 !windows/**
 common/bin/
 common/obj/
+common/**/bin/
+common/**/obj/
