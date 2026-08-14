@@ -68,9 +68,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             var runArguments = new List<string> {
                 "run", "--detach", "--name", container, "--env", "COMPOSE_UNITY_MCP=1"
             };
-            if (expectedOs == "windows") {
-                runArguments.AddRange(["--isolation", "hyperv"]);
-            } else {
+            if (expectedOs == "linux") {
                 runArguments.AddRange(["--publish", "127.0.0.1::8080"]);
             }
             runArguments.AddRange(["--mount", dockerMount, image]);

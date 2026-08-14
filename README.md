@@ -464,11 +464,12 @@ drives Docker and MCP directly and verifies the advertised tools, real project
 probing, argument boundaries, Docker output and exit codes, JUnit results,
 retained worker reuse, project mounts, and exclusion of the Docker endpoint
 from workers. The Windows fixture uses the official .NET 9 Nano Server 1809
-image and Hyper-V isolation so it exercises the same LTSC 2019 target on newer
-Windows hosts. GitHub Actions runs the daemon-free suite plus Linux and Windows
-daemon fixtures before image builds. Full Unity invocation remains in the local
-image test scripts because editor downloads and licensing make it unsuitable
-for the lightweight CI harness.
+image and respects the daemon's default isolation mode, matching fleet behavior.
+The GitHub Actions Windows runner configures Hyper-V as the daemon default so
+the LTSC 2019 container can run on Windows Server 2022. CI runs the daemon-free
+suite plus Linux and Windows daemon fixtures before image builds. Full Unity
+invocation remains in the local image test scripts because editor downloads and
+licensing make it unsuitable for the lightweight CI harness.
 
 The Windows image also compiles a Unity Hub launcher that adapts headless command-line arguments for Windows containers. Its embedded Hub runtime is patched to retry interrupted downloads and launch Editor installers directly instead of waiting for unavailable UAC interaction.
 

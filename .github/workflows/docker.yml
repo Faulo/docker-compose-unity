@@ -48,6 +48,25 @@ jobs:
               uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
               with:
                   dotnet-version: 9.0.x
+            - name: Configure Hyper-V as Docker default isolation
+              shell: pwsh
+              run: |
+                  $configPath = Join-Path $env:ProgramData "docker\config\daemon.json"
+                  $configDirectory = Split-Path -Parent $configPath
+                  New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
+                  $config = if (Test-Path -LiteralPath $configPath) {
+                      Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json -AsHashtable
+                  } else {
+                      @{}
+                  }
+                  $execOptions = @($config["exec-opts"] | Where-Object { $_ -notmatch "^isolation=" })
+                  $config["exec-opts"] = @($execOptions + "isolation=hyperv")
+                  $config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $configPath -Encoding utf8
+                  Restart-Service docker
+                  $isolation = docker info --format "{{.Isolation}}"
+                  if ($LASTEXITCODE -ne 0 -or $isolation.Trim() -ne "hyperv") {
+                      throw "Docker did not start with Hyper-V as its default isolation: $isolation"
+                  }
             - name: Register Windows Docker context
               shell: pwsh
               run: docker context create windows --docker "host=npipe:////./pipe/docker_engine"
