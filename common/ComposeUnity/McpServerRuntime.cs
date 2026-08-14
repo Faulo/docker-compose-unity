@@ -13,14 +13,22 @@ namespace ComposeUnity;
 
 static class McpActivation {
     internal static bool Parse() =>
-        Parse(Environment.GetEnvironmentVariable("COMPOSE_UNITY_MCP"));
+        Parse(
+            Environment.GetEnvironmentVariable("COMPOSE_UNITY_MCP"),
+            warning => Console.Error.WriteLine($"compose-unity-sidecar: warning: {warning}"));
 
-    internal static bool Parse(string? value) =>
-        value switch {
-            null or "" or "0" => false,
-            "1" => true,
-            _ => throw new ArgumentException("COMPOSE_UNITY_MCP must be unset, 0, or 1.")
-        };
+    internal static bool Parse(string? value, Action<string>? warn = null) {
+        if (value is null or "0") {
+            return false;
+        }
+
+        if (value == "1") {
+            return true;
+        }
+
+        warn?.Invoke("ignoring invalid COMPOSE_UNITY_MCP value; use 1 to enable MCP or 0 to disable it.");
+        return false;
+    }
 }
 
 sealed class McpServerRuntime : IAsyncDisposable {

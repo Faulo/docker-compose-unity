@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace ComposeUnity.Tests;
 
 public sealed class StateAndConcurrencyTests {
@@ -82,6 +84,20 @@ public sealed class StateAndConcurrencyTests {
         Assert.That(UnityMcpController.ProjectIdentityPath("c:\\project", false), Is.EqualTo("C:\\PROJECT"));
         Assert.That(UnityMcpController.ProjectIdentityPath("/project", true), Is.EqualTo("/PROJECT"));
         Assert.That(UnityMcpController.ProjectIdentityPath("/project", false), Is.EqualTo("/project"));
+    }
+
+    [Test]
+    public void CanonicalizesWorkerConfigurationFingerprints() {
+        var first = JsonNode.Parse("""{"nested":{"b":2,"a":1},"enabled":true}""")!;
+        var reordered = JsonNode.Parse("""{"enabled":true,"nested":{"a":1,"b":2}}""")!;
+        var changed = JsonNode.Parse("""{"enabled":true,"nested":{"a":1,"b":3}}""")!;
+
+        Assert.Multiple(() => {
+            Assert.That(UnityMcpController.ConfigurationFingerprint(first),
+                Is.EqualTo(UnityMcpController.ConfigurationFingerprint(reordered)));
+            Assert.That(UnityMcpController.ConfigurationFingerprint(first),
+                Is.Not.EqualTo(UnityMcpController.ConfigurationFingerprint(changed)));
+        });
     }
 
     sealed class TemporaryDirectory : IDisposable {

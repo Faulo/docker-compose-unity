@@ -207,6 +207,7 @@ public sealed class DockerEngineClientTests {
         int lockCreates = 0;
         int lockDeletes = 0;
         int workerCreates = 0;
+        int workerDeletes = 0;
         int execCreates = 0;
         JsonObject? probeConfiguration = null;
         JsonObject? workerConfiguration = null;
@@ -242,7 +243,11 @@ public sealed class DockerEngineClientTests {
                         ["Id"] = selfId,
                         ["Image"] = imageId,
                         ["Config"] = new JsonObject {
-                            ["Env"] = DockerEngineClient.ToArray(["UNITY_NO_GRAPHICS=1", "UNRELATED_SECRET=hidden"])
+                            ["Env"] = DockerEngineClient.ToArray([
+                                "UNITY_NO_GRAPHICS=1",
+                                "UNRELATED_SECRET=hidden",
+                                "COMPOSE_UNITY_CALL_TIMEOUT=30"
+                            ])
                         },
                         ["HostConfig"] = new JsonObject { ["Memory"] = 1_048_576, ["ShmSize"] = 67_108_864 },
                         ["Mounts"] = new JsonArray {
@@ -296,6 +301,8 @@ public sealed class DockerEngineClientTests {
                     probeDeletes++;
                 } else if (name.StartsWith("compose-unity-lock-", StringComparison.Ordinal)) {
                     lockDeletes++;
+                } else if (name.StartsWith("compose-unity-worker-", StringComparison.Ordinal)) {
+                    workerDeletes++;
                 }
 
                 configurations.TryRemove(name, out _);
@@ -324,6 +331,10 @@ public sealed class DockerEngineClientTests {
 
         object first = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["", "two words", "--"], CancellationToken.None);
         object second = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["again"], CancellationToken.None);
+        int workerCreatesAfterReuse = workerCreates;
+        string workerName = configurations.Keys.Single(name => name.StartsWith("compose-unity-worker-", StringComparison.Ordinal));
+        configurations[workerName]["Labels"]!["net.slothsoft.compose-unity.worker-configuration"] = "stale";
+        object third = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["after-change"], CancellationToken.None);
 
         var firstResult = JsonNode.Parse(JsonSerializer.Serialize(first))!.AsObject();
         var probeMount = probeConfiguration!["HostConfig"]!["Mounts"]![0]!;
@@ -335,18 +346,23 @@ public sealed class DockerEngineClientTests {
         Assert.Multiple(() => {
             Assert.That(probeCreates, Is.EqualTo(1), "The validated project should be cached.");
             Assert.That(probeDeletes, Is.EqualTo(1));
-            Assert.That(lockCreates, Is.EqualTo(2));
-            Assert.That(lockDeletes, Is.EqualTo(2));
-            Assert.That(workerCreates, Is.EqualTo(1), "The retained worker should be reused.");
-            Assert.That(execCreates, Is.EqualTo(2));
+            Assert.That(lockCreates, Is.EqualTo(3));
+            Assert.That(lockDeletes, Is.EqualTo(3));
+            Assert.That(workerCreatesAfterReuse, Is.EqualTo(1), "A matching retained worker should be reused.");
+            Assert.That(workerCreates, Is.EqualTo(2), "A worker with a stale configuration fingerprint should be replaced.");
+            Assert.That(workerDeletes, Is.EqualTo(1));
+            Assert.That(execCreates, Is.EqualTo(3));
             Assert.That(firstResult["exitStatus"]?.GetValue<int>(), Is.EqualTo(7));
             Assert.That(firstResult["output"]?.GetValue<string>(), Is.EqualTo("method output"));
             Assert.That(firstResult["errorOutput"]?.GetValue<string>(), Is.EqualTo("method warning"));
             Assert.That(JsonNode.Parse(JsonSerializer.Serialize(second))!["exitStatus"]?.GetValue<int>(), Is.EqualTo(7));
+            Assert.That(JsonNode.Parse(JsonSerializer.Serialize(third))!["exitStatus"]?.GetValue<int>(), Is.EqualTo(7));
             Assert.That(workerConfiguration["Image"]?.GetValue<string>(), Is.EqualTo(imageId));
+            Assert.That(workerConfiguration["Labels"]?["net.slothsoft.compose-unity.worker-configuration"]?.GetValue<string>(),
+                Does.Match("^[0-9a-f]{64}$"));
             Assert.That(workerConfiguration["HostConfig"]?["Memory"]?.GetValue<long>(), Is.EqualTo(1_048_576));
             Assert.That(workerConfiguration["HostConfig"]?["ShmSize"]?.GetValue<long>(), Is.EqualTo(67_108_864));
-            Assert.That(workerEnvironment, Is.EqualTo(new[] { "UNITY_NO_GRAPHICS=1" }));
+            Assert.That(workerEnvironment, Is.EqualTo(new[] { "COMPOSE_UNITY_CALL_TIMEOUT=30", "UNITY_NO_GRAPHICS=1" }));
             Assert.That(probeMount["ReadOnly"]?.GetValue<bool>(), Is.True);
             Assert.That(probeMount["BindOptions"]?["CreateMountpoint"]?.GetValue<bool>(), Is.False);
             Assert.That(workerMounts, Has.Count.EqualTo(4));

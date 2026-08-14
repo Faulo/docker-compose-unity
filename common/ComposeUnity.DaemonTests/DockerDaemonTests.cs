@@ -143,6 +143,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         Assert.That(workerAfter, Is.EqualTo(workerBefore), "The retained worker was not reused.");
 
         var mounts = JsonNode.Parse((await DockerCheckedAsync(["inspect", "--format", "{{json .Mounts}}", workerBefore])).standardOutput)!.AsArray();
+        string fingerprint = (await DockerCheckedAsync([
+            "inspect", "--format", "{{index .Config.Labels \"net.slothsoft.compose-unity.worker-configuration\"}}", workerBefore
+        ])).standardOutput.Trim();
         string[] destinations = mounts.Select(mount => mount!["Destination"]!.GetValue<string>()).ToArray();
         int projectMounts = destinations.Count(destination => ProjectDirectoryRegex().IsMatch(destination));
         int dockerMounts = destinations.Count(destination => destination.Equals("/var/run/docker.sock", StringComparison.Ordinal)
@@ -150,6 +153,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         using (Assert.EnterMultipleScope()) {
             Assert.That(projectMounts, Is.EqualTo(3));
             Assert.That(dockerMounts, Is.Zero, "The worker must not receive the controller's Docker endpoint.");
+            Assert.That(fingerprint, Does.Match("^[0-9a-f]{64}$"));
         }
     }
 

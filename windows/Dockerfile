@@ -304,6 +304,7 @@ RUN $archive = 'C:\steamcmd.zip'; \
     if (Test-Path -LiteralPath C:\steam) { throw 'SteamCMD volume directory must not be populated in the image' }
 
 ENV COMPOSE_UNITY_CALL_TIMEOUT=86400
+ENV COMPOSE_UNITY_MCP=0
 
 ARG UNITY_TIMEOUT="14400"
 ARG SLOTHSOFT_UNITY_VERSION=2.21

@@ -12,6 +12,7 @@ namespace ComposeUnity;
 
 sealed class UnityMcpController : IAsyncDisposable {
     const string LABEL_PREFIX = "net.slothsoft.compose-unity";
+    const string WORKER_CONFIGURATION_LABEL = $"{LABEL_PREFIX}.worker-configuration";
     static readonly TimeSpan WorkerStopTimeout = TimeSpan.FromSeconds(10);
 
     static readonly string[] ForwardedEnvironmentNames = [
@@ -346,18 +347,32 @@ sealed class UnityMcpController : IAsyncDisposable {
 
     async Task<WorkerContainer> EnsureWorkerAsync(ValidatedProject project, CancellationToken cancellationToken) {
         string name = $"compose-unity-worker-{project.id[..16]}-{imageHash}";
+        var configuration = BuildWorkerConfiguration(project);
+        string expectedFingerprint = configuration["Labels"]?[WORKER_CONFIGURATION_LABEL]?.GetValue<string>()
+                                     ?? throw new InvalidOperationException("The worker configuration fingerprint is missing.");
         var inspected = await docker.TryInspectContainerAsync(name, cancellationToken);
         bool reused = inspected is not null;
+        if (inspected is not null) {
+            ValidateWorkerIdentity(inspected, project);
+            string? actualFingerprint = inspected["Config"]?["Labels"]?[WORKER_CONFIGURATION_LABEL]?.GetValue<string>();
+            if (actualFingerprint != expectedFingerprint) {
+                await docker.StopContainerAsync(name, WorkerStopTimeout, cancellationToken);
+                await docker.RemoveContainerAsync(name, true, true, cancellationToken);
+                inspected = null;
+                reused = false;
+            }
+        }
+
         if (inspected is null) {
             try {
-                await docker.CreateContainerAsync(name, BuildWorkerConfiguration(project), cancellationToken);
+                await docker.CreateContainerAsync(name, configuration, cancellationToken);
             } catch (DockerApiException exception) when (exception.statusCode == HttpStatusCode.Conflict) {
             }
 
             inspected = await docker.InspectContainerAsync(name, cancellationToken);
         }
 
-        ValidateWorker(inspected, project);
+        ValidateWorker(inspected, project, expectedFingerprint);
         if (inspected["State"]?["Running"]?.GetValue<bool>() != true) {
             try {
                 await docker.StartContainerAsync(name, cancellationToken);
@@ -385,7 +400,15 @@ sealed class UnityMcpController : IAsyncDisposable {
 
         var labels = Labels("worker", project);
         labels[$"{LABEL_PREFIX}.image"] = imageId;
-        return new JsonObject { ["Image"] = imageId, ["Env"] = ForwardedEnvironment(), ["Labels"] = labels, ["HostConfig"] = hostConfiguration };
+        var environment = ForwardedEnvironment();
+        var reuseContract = new JsonObject {
+            ["Image"] = imageId,
+            ["Project"] = project.id,
+            ["Env"] = environment.DeepClone(),
+            ["HostConfig"] = hostConfiguration.DeepClone()
+        };
+        labels[WORKER_CONFIGURATION_LABEL] = ConfigurationFingerprint(reuseContract);
+        return new JsonObject { ["Image"] = imageId, ["Env"] = environment, ["Labels"] = labels, ["HostConfig"] = hostConfiguration };
     }
 
     JsonArray BuildWorkerMounts(ValidatedProject project) {
@@ -447,19 +470,33 @@ sealed class UnityMcpController : IAsyncDisposable {
 
     JsonArray ForwardedEnvironment() {
         var allowed = new HashSet<string>(ForwardedEnvironmentNames, StringComparer.Ordinal);
-        var result = new JsonArray();
+        var entries = new List<string>();
         foreach (var node in self["Config"]?["Env"]?.AsArray() ?? []) {
             string? entry = node?.GetValue<string>();
             int separator = entry?.IndexOf('=') ?? -1;
             if (separator > 0 && allowed.Contains(entry![..separator])) {
-                result.Add(entry);
+                entries.Add(entry);
             }
+        }
+
+        entries.Sort(StringComparer.Ordinal);
+        var result = new JsonArray();
+        foreach (string entry in entries) {
+            result.Add(entry);
         }
 
         return result;
     }
 
-    void ValidateWorker(JsonObject worker, ValidatedProject project) {
+    void ValidateWorker(JsonObject worker, ValidatedProject project, string expectedFingerprint) {
+        ValidateWorkerIdentity(worker, project);
+        string? actualFingerprint = worker["Config"]?["Labels"]?[WORKER_CONFIGURATION_LABEL]?.GetValue<string>();
+        if (actualFingerprint != expectedFingerprint) {
+            throw new InvalidOperationException("A conflicting container has an incompatible MCP worker configuration.");
+        }
+    }
+
+    void ValidateWorkerIdentity(JsonObject worker, ValidatedProject project) {
         var labels = worker["Config"]?["Labels"]?.AsObject();
         if (labels?[$"{LABEL_PREFIX}.kind"]?.GetValue<string>() != "worker"
             || labels[$"{LABEL_PREFIX}.project"]?.GetValue<string>() != project.id
@@ -617,6 +654,22 @@ sealed class UnityMcpController : IAsyncDisposable {
 
     static string Hash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    internal static string ConfigurationFingerprint(JsonNode configuration) =>
+        Hash(Canonicalize(configuration).ToJsonString());
+
+    static JsonNode Canonicalize(JsonNode node) =>
+        node switch {
+            JsonObject value => new JsonObject(value
+                .OrderBy(property => property.Key, StringComparer.Ordinal)
+                .Select(property => KeyValuePair.Create(
+                    property.Key,
+                    property.Value is null ? null : Canonicalize(property.Value)))),
+            JsonArray value => new JsonArray(value
+                .Select(item => item is null ? null : Canonicalize(item))
+                .ToArray()),
+            _ => node.DeepClone()
+        };
 
     static void LogStart(string tool, string project) =>
         Console.WriteLine($"MCP START tool={tool} project={project[..12]}");

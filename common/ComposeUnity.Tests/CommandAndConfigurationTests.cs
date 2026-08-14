@@ -36,18 +36,20 @@ public sealed class CommandAndConfigurationTests {
         Assert.That(command.arguments, Is.SameAs(arguments));
     }
 
-    [TestCase(null, false)]
-    [TestCase("", false)]
-    [TestCase("0", false)]
-    [TestCase("1", true)]
-    public void ParsesMcpActivation(string? value, bool expected) =>
-        Assert.That(McpActivation.Parse(value), Is.EqualTo(expected));
-
-    [TestCase("true")]
-    [TestCase(" 1")]
-    [TestCase("2")]
-    public void RejectsInvalidMcpActivation(string value) =>
-        Assert.Throws<ArgumentException>(() => McpActivation.Parse(value));
+    [TestCase(null, false, false)]
+    [TestCase("0", false, false)]
+    [TestCase("1", true, false)]
+    [TestCase("", false, true)]
+    [TestCase("true", false, true)]
+    [TestCase(" 1", false, true)]
+    [TestCase("2", false, true)]
+    public void ParsesMcpActivation(string? value, bool expected, bool expectsWarning) {
+        var warnings = new List<string>();
+        Assert.Multiple(() => {
+            Assert.That(McpActivation.Parse(value, warnings.Add), Is.EqualTo(expected));
+            Assert.That(warnings, expectsWarning ? Has.Count.EqualTo(1) : Is.Empty);
+        });
+    }
 
     [TestCase(null, 86_400)]
     [TestCase("", 86_400)]

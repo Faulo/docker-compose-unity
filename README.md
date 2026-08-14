@@ -303,10 +303,11 @@ form. The compatibility link may be removed in a future major release.
 
 ## Optional MCP Server
 
-Set `COMPOSE_UNITY_MCP=1` to run the sidecar supervisor and an official ASP.NET
-Core Streamable HTTP MCP server together. The endpoint is fixed at `/mcp` on
-container port `8080`. An unset value or `0` keeps the existing sidecar-only
-behavior; every other value is a startup error.
+Both images default `COMPOSE_UNITY_MCP` to `0`. Set it to `1` to run the sidecar
+supervisor and an official ASP.NET Core Streamable HTTP MCP server together.
+The endpoint is fixed at `/mcp` on container port `8080`. An unset value or `0`
+keeps the existing sidecar-only behavior. Every other value logs a warning and
+leaves MCP disabled; only the exact value `1` enables it.
 
 The MCP sidecar controls persistent Unity worker containers, so it must be able
 to access the same local Docker Engine that runs it. Publish the endpoint only
@@ -400,17 +401,21 @@ users can pass a natural Windows host path such as
 daemon unchanged and uses the daemon-reported bind source after validation.
 The path must contain `Assets`, `Packages`, and `ProjectSettings` directories.
 
-One worker is retained for each normalized project and immutable controller
-image. Only the three project directories are bind-mounted writable; the
-worker's `Library` remains in its container layer so imports survive later
-calls and stay specific to that image and container OS. Workers inherit known
+One worker is retained for each normalized project, immutable controller image,
+and effective worker configuration. Only the three project directories are
+bind-mounted writable; the worker's `Library` remains in its container layer so
+imports survive later calls and stay specific to that image and container OS.
+Workers inherit known
 Unity editor, cache, configuration, licensing, and Steam volumes, applicable
 resource limits and GPU device configuration, and only these environment
 variables when present: `UNITY_NO_GRAPHICS`, `UNITY_ACCELERATOR_ENDPOINT`,
 `UNITY_ACCELERATOR_PARAMS`, `UNITY_LOGGING`, `UNITY_EMPTY_MANIFEST`,
 `UNITY_CREDENTIALS_USR`, `UNITY_CREDENTIALS_PSW`, `EMAIL_CREDENTIALS_USR`,
 `EMAIL_CREDENTIALS_PSW`, and `COMPOSE_UNITY_CALL_TIMEOUT`. The Docker socket or
-named pipe is never passed to workers.
+named pipe is never passed to workers. A canonical fingerprint covers the image
+ID, project identity, forwarded environment, inherited state mounts, resource
+limits, isolation, and device configuration. A retained worker whose fingerprint
+does not match is replaced before use.
 
 Calls use a FIFO lane per project. A daemon-wide project lock also prevents
 overlapping Unity operations from duplicate sidecars or different image
