@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <ComposeUnityTargetFramework Condition="'$(ComposeUnityTargetFramework)' == ''">net8.0</ComposeUnityTargetFramework>
-    <TargetFramework>$(ComposeUnityTargetFramework)</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <DebugType>none</DebugType>
