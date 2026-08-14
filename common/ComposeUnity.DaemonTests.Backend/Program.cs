@@ -1,6 +1,6 @@
+using System.Diagnostics;
 using System.Security;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 if (args.Contains("--version", StringComparer.Ordinal)) {
     Console.WriteLine("ComposeUnity daemon-test backend 1.0");
@@ -8,7 +8,7 @@ if (args.Contains("--version", StringComparer.Ordinal)) {
 }
 
 if (args.Length == 3 && args[0] == "sidecar" && args[1] == "probe-project") {
-    return probeProject(args[2]);
+    return runControllerProbe(args[2]);
 }
 
 int separator = Array.IndexOf(args, "--");
@@ -24,38 +24,16 @@ return command[0] switch {
     _ => unexpected(command)
 };
 
-static int probeProject(string root) {
-    try {
-        foreach (string directory in new[] { "Assets", "Packages", "ProjectSettings" }) {
-            if (!Directory.Exists(Path.Combine(root, directory))) {
-                throw new InvalidOperationException($"Required Unity project directory is missing: {directory}");
-            }
-        }
-
-        string[] version = File.ReadAllLines(Path.Combine(root, "ProjectSettings", "ProjectVersion.txt"));
-        string[] settings = File.ReadAllLines(Path.Combine(root, "ProjectSettings", "ProjectSettings.asset"));
-        var packages = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "Packages", "manifest.json")));
-        var result = new {
-            companyName = setting(settings, "companyName"),
-            projectName = setting(settings, "productName"),
-            projectVersion = setting(settings, "bundleVersion"),
-            editorVersion = value(version, "m_EditorVersion:"),
-            editorRevision = (string?)null,
-            apiCompatibility = "DaemonTest",
-            allowUnsafeCode = false,
-            scriptingBackendOverrides = new Dictionary<string, string>(),
-            renderPipeline = "DaemonTest",
-            colorSpace = "DaemonTest",
-            graphicsApis = new Dictionary<string, object>(),
-            inputHandling = "DaemonTest",
-            packages
-        };
-        Console.WriteLine(JsonSerializer.Serialize(result));
-        return 0;
-    } catch (Exception exception) {
-        Console.Error.WriteLine(exception.Message);
-        return 1;
-    }
+static int runControllerProbe(string root) {
+    string executable = Path.Combine(AppContext.BaseDirectory,
+        OperatingSystem.IsWindows() ? "compose-unity-controller.exe" : "compose-unity-controller");
+    var startInfo = new ProcessStartInfo(executable) { UseShellExecute = false };
+    startInfo.ArgumentList.Add("sidecar");
+    startInfo.ArgumentList.Add("probe-project");
+    startInfo.ArgumentList.Add(root);
+    using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start the real project probe.");
+    process.WaitForExit();
+    return process.ExitCode;
 }
 
 static int executeMethod(string[] command) {
@@ -85,18 +63,3 @@ static int unexpected(string[] command) {
     Console.Error.WriteLine($"Unexpected daemon-test operation: {JsonSerializer.Serialize(command)}");
     return 2;
 }
-
-static string setting(IEnumerable<string> lines, string name) {
-    string prefix = $"  {name}:";
-    string value = lines.First(line => line.StartsWith(prefix, StringComparison.Ordinal))[prefix.Length..].Trim();
-    if (value.Length >= 2 && value[0] == '"' && value[^1] == '"') {
-        return JsonSerializer.Deserialize<string>(value) ?? string.Empty;
-    }
-
-    return value.Length >= 2 && value[0] == '\'' && value[^1] == '\''
-        ? value[1..^1].Replace("''", "'", StringComparison.Ordinal)
-        : value;
-}
-
-static string value(IEnumerable<string> lines, string prefix) =>
-    lines.First(line => line.StartsWith(prefix, StringComparison.Ordinal))[prefix.Length..].Trim();

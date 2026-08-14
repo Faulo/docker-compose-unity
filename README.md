@@ -41,8 +41,8 @@ Build inputs are organized by ownership:
   sidecar source, targeting .NET 9.0 by default.
 - `common/ComposeUnity.Tests/` contains daemon-free unit tests and their Unity
   project fixtures.
-- `common/ComposeUnity.IntegrationTests/` contains the disposable Docker
-  end-to-end test for the MCP `project_info` tool.
+- `common/ComposeUnity.DaemonTests/` contains opt-in NUnit tests against local
+  Linux and Windows Docker daemons and a deterministic worker backend.
 - `linux/` contains the Linux Dockerfile and machine identity.
 - `windows/` contains the Windows Dockerfile, Hub launcher and patch, Chocolatey package, and PHP extension configuration.
 
@@ -453,29 +453,16 @@ contexts are accepted.
 The tests publish the current controller and a deterministic fake
 `compose-unity` executable, then assemble a minimal image from the applicable
 .NET runtime-deps base. The fake executable occupies the same path workers use
-in production, but does not install Composer, PHP, Unity, or the other production
-image tools. The suite verifies project probing, MCP calls, argument boundaries,
-Docker output and exit codes, JUnit results, retained worker reuse, project
-mounts, and exclusion of the Docker endpoint from workers. The Windows fixture
-uses the official .NET 9 Nano Server 1809 image for LTSC 2019 hosts.
-
-The MCP `project_info` path has a separate end-to-end test. It builds a small
-disposable image under the permitted `tmp/` namespace, starts a sidecar against
-the explicitly selected local Docker context, verifies the advertised tool set,
-and calls `project_info` against the checked-in project fixture:
-
-```powershell
-./common/ComposeUnity.IntegrationTests/project-info.ps1 -Context linux
-./common/ComposeUnity.IntegrationTests/project-info.ps1 -Context windows `
-    -Image tmp/compose-unity:latest -SkipBuild
-```
-
-The lightweight integration Dockerfile is Linux-only. The Windows command
-reuses a previously built production image so it also validates the real
-Windows launcher and image configuration. GitHub Actions runs the daemon-free
-suite and Linux end-to-end test before image builds. Full Unity invocation
-remains in the local image test scripts because editor downloads and licensing
-make it unsuitable for the lightweight CI harness.
+in production and delegates project probing to the real controller, but does
+not install Composer, PHP, Unity, or the other production image tools. NUnit
+drives Docker and MCP directly and verifies the advertised tools, real project
+probing, argument boundaries, Docker output and exit codes, JUnit results,
+retained worker reuse, project mounts, and exclusion of the Docker endpoint
+from workers. The Windows fixture uses the official .NET 9 Nano Server 1809
+image for LTSC 2019 hosts. GitHub Actions runs the daemon-free suite and the
+Linux daemon fixture before image builds. Full Unity invocation remains in the
+local image test scripts because editor downloads and licensing make it
+unsuitable for the lightweight CI harness.
 
 The Windows image also compiles a Unity Hub launcher that adapts headless command-line arguments for Windows containers. Its embedded Hub runtime is patched to retry interrupted downloads and launch Editor installers directly instead of waiting for unavailable UAC interaction.
 

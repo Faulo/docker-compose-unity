@@ -35,9 +35,8 @@ jobs:
               run: dotnet test common/ComposeUnity.Tests/ComposeUnity.Tests.csproj --nologo --configuration Release
             - name: Register Linux Docker context
               run: docker context create linux --docker host=unix:///var/run/docker.sock
-            - name: Run project_info integration test
-              shell: pwsh
-              run: ./common/ComposeUnity.IntegrationTests/project-info.ps1 -Context linux
+            - name: Run real-daemon tests
+              run: dotnet test common/ComposeUnity.DaemonTests/ComposeUnity.DaemonTests.csproj --nologo --configuration Release
 
     configuration:
         needs: test
