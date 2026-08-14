@@ -9,11 +9,28 @@ using System.Text.Json.Nodes;
 namespace ComposeUnity;
 
 sealed class DockerEngineClient : IAsyncDisposable {
+    const string DEFAULT_UNIX_SOCKET_PATH = "/var/run/docker.sock";
+    const string DEFAULT_WINDOWS_PIPE_NAME = "docker_engine";
     static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     readonly HttpClient client;
+    readonly string unixSocketPath;
+    readonly string windowsPipeName;
 
-    internal DockerEngineClient() {
+    internal DockerEngineClient() : this(DEFAULT_WINDOWS_PIPE_NAME, DEFAULT_UNIX_SOCKET_PATH) {
+    }
+
+    internal DockerEngineClient(string windowsPipeName, string unixSocketPath) {
+        if (string.IsNullOrWhiteSpace(windowsPipeName)) {
+            throw new ArgumentException("The Docker Engine pipe name must not be empty.", nameof(windowsPipeName));
+        }
+
+        if (string.IsNullOrWhiteSpace(unixSocketPath)) {
+            throw new ArgumentException("The Docker Engine socket path must not be empty.", nameof(unixSocketPath));
+        }
+
+        this.windowsPipeName = windowsPipeName;
+        this.unixSocketPath = unixSocketPath;
         var handler = new SocketsHttpHandler { ConnectCallback = ConnectAsync };
         client = new HttpClient(handler) { BaseAddress = new Uri("http://docker"), Timeout = Timeout.InfiniteTimeSpan };
     }
@@ -205,24 +222,23 @@ sealed class DockerEngineClient : IAsyncDisposable {
         throw new DockerApiException(response.StatusCode, string.IsNullOrWhiteSpace(detail) ? response.ReasonPhrase : detail);
     }
 
-    static async ValueTask<Stream> ConnectAsync(
+    async ValueTask<Stream> ConnectAsync(
         SocketsHttpConnectionContext context,
         CancellationToken cancellationToken) {
         _ = context;
         if (OperatingSystem.IsWindows()) {
             var pipe = new NamedPipeClientStream(
                 ".",
-                "docker_engine",
+                windowsPipeName,
                 PipeDirection.InOut,
                 PipeOptions.Asynchronous);
             await pipe.ConnectAsync(cancellationToken);
             return pipe;
         }
 
-        const string socketPath = "/var/run/docker.sock";
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try {
-            await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken);
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(unixSocketPath), cancellationToken);
             return new NetworkStream(socket, true);
         } catch {
             socket.Dispose();

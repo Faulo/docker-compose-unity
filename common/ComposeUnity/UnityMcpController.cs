@@ -97,8 +97,16 @@ sealed class UnityMcpController : IAsyncDisposable {
         await docker.DisposeAsync();
     }
 
-    internal static async Task<UnityMcpController> CreateAsync(CancellationToken stoppingToken) {
-        var docker = new DockerEngineClient();
+    internal static Task<UnityMcpController> CreateAsync(CancellationToken stoppingToken) =>
+        CreateAsync(new DockerEngineClient(), stoppingToken);
+
+    internal static Task<UnityMcpController> CreateAsync(
+        CancellationToken stoppingToken,
+        string windowsPipeName,
+        string unixSocketPath) =>
+        CreateAsync(new DockerEngineClient(windowsPipeName, unixSocketPath), stoppingToken);
+
+    static async Task<UnityMcpController> CreateAsync(DockerEngineClient docker, CancellationToken stoppingToken) {
         try {
             JsonObject version;
             try {
