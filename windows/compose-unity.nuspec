@@ -7,10 +7,13 @@
     <description>Slothsoft's Unity Image</description>
     <dependencies>
       <dependency id="git" />
+      <dependency id="git-lfs" />
       <dependency id="zip" />
       <dependency id="nano" />
       <dependency id="curl" />
       <dependency id="nodejs" />
+      <dependency id="python3" />
+      <dependency id="ffmpeg" />
       <dependency id="blender" />
       <dependency id="butler" />
       <dependency id="vcredist2010" />

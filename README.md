@@ -4,34 +4,70 @@ This repository builds Linux and Windows Docker images for installing Unity edit
 
 ## Image Contents
 
+### Common
+
 Both image variants provide:
 
 - Unity Hub 3.12.1.
-- The `compose-unity` command backed by Composer and `slothsoft/unity`.
+- The native `compose-unity` launcher, backed by Composer 2 and
+  `slothsoft/unity`.
+- A long-running sidecar with health checks and process-tree cleanup.
+- An optional ASP.NET Core Streamable HTTP MCP server for inspecting projects,
+  running tests, executing editor methods, and building and serving WebGL.
 - Node.js and npm.
 - The itch.io Butler client.
 - SteamCMD.
 - Blender 4.5.
-- PHP 8.2 and Composer 2.
-- .NET SDK 9.
-- DocFX.
-- Git, curl, and archive utilities.
+- PHP 8.2.
+- .NET SDK 9 and DocFX.
+- Git and Git LFS.
+- Python 3.
+- FFmpeg, curl, and archive utilities.
 
-The Windows image additionally provides PowerShell 7.6.4 as `pwsh` and the
-Visual C++ 2010, 2013, and 2015-2022 runtimes required by Unity's native editor
-libraries.
+The following build arguments are shared by both variants:
 
-The Linux image additionally includes the x64 SteamCMD client, Xvfb, and ICU for
-the .NET-based Unity Licensing Client. The Windows image uses the full Windows
-container image so Unity packages can use desktop WinRT APIs. Its `OS_BASE`
-build argument defaults to `1809` and also accepts `20H2`; the available .NET
-Framework runtime comes from the selected Windows base. Both Windows variants
-include the supported Visual Studio 2019 Build Tools servicing baseline. Visual
-Studio 2022 Build Tools are not used because their MSBuild assemblies are
-incompatible with the .NET Framework build host used by `dotnet format` and
-DocFX. Both variants also include native launchers for `compose-unity` and Unity
-Hub, and machine-wide `.blend`/`.fbx` associations that invoke `blender.exe`
-directly for Unity's Blender-to-FBX import workflow.
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `BLENDER_SERIES` | `4.5` | Selects the Blender release series. |
+| `DOTNET_VERSION` | `9.0` | Selects the .NET SDK feature version used by the image and native launcher. |
+| `NODE_VERSION` | `24` | Selects the installed Node.js major release. |
+| `SLOTHSOFT_UNITY_VERSION` | `2.22` | Selects the compatible `slothsoft/unity` release. |
+| `UNITY_TIMEOUT` | `14400` | Sets Composer's process timeout in seconds for Unity commands. |
+
+### Linux
+
+The Linux image is based on Debian Bookworm Slim and additionally provides:
+
+- Xvfb and X authentication tools for headless editor execution.
+- ICU for the .NET-based Unity Licensing Client.
+- OpenSSL 1.1 compatibility for Unity 2021.
+
+Linux-specific build arguments are:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `DEBIAN_FRONTEND` | `noninteractive` | Keeps Debian package installation non-interactive during the build. |
+
+### Windows
+
+The Windows image uses the full Windows container base so Unity packages can
+access desktop WinRT APIs. It additionally provides:
+
+- Chocolatey.
+- PowerShell 7.6.4 as `pwsh`.
+- Visual Studio 2019 Build Tools and .NET Framework 4.7.1 reference
+  assemblies.
+- Visual C++ 2010, 2013, and 2015-2022 runtimes required by Unity's native
+  editor libraries.
+- Container-safe `.blend` and `.fbx` associations that invoke `blender.exe`
+  directly, including a `SHELL32` compatibility proxy for mounted paths.
+
+Windows-specific build arguments are:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `OS_BASE` | `1809` | Selects the Windows base; `1809` and `20H2` are supported. |
+| `POWERSHELL_VERSION` | `7.6.4` | Selects the installed PowerShell release. |
 
 ## Repository Layout
 
@@ -52,165 +88,47 @@ The compose-unity tool stack is installed at `/compose-unity` in the Linux
 image and `C:\compose-unity` in the Windows image. Runtime-owned subdirectories,
 including the WebGL document root, live beneath these locations.
 
-Both images default `SLOTHSOFT_UNITY_VERSION` to `2.21` and require the
-corresponding compatible Composer release range, `^2.21`. Override the build
-argument to select a different compatible minor release.
-
 ## Docker Contexts
 
 The local development setup assumes two explicitly named Docker contexts:
 
-- `linux` should point to a docker host running linux containers.
-- `windows` should point to a docker host running windows containers.
+- `linux` should point to a Docker host running Linux containers.
+- `windows` should point to a Docker host running Windows containers.
 
-## Configuration
+## GPU Acceleration
 
-Project-specific script configuration lives in `.env`:
+Both images default to `UNITY_NO_GRAPHICS=1` so they remain usable on GPU-less
+hosts. Expose a compatible host GPU and set `UNITY_NO_GRAPHICS=0` to allow
+Unity to initialize a graphics device:
 
-```dotenv
-DOCKER_IMAGE=compose-unity
-DOCKER_TEST_ARGS="--env UNITY_CREDENTIALS_USR --env UNITY_CREDENTIALS_PSW --env EMAIL_CREDENTIALS_USR --env EMAIL_CREDENTIALS_PSW"
-DOCKER_TEST_ARGS_LINUX="-v \"unity-binaries:/root/Unity\""
-DOCKER_TEST_ARGS_WINDOWS="-v \"unity-binaries:C:/Program Files/Unity/Hub/Editor\""
-DOCKER_TEST_ARGS_WINDOWS_GPU="--isolation process --device \"class/5B45201D-F2F2-4F3B-85BB-30FF1F953599\" --env UNITY_NO_GRAPHICS=0"
-DOCKER_TEST_CMD="compose-unity exec unity-empty-project test"
-DOCKER_TEST_VERSIONS="2019.4.41f2 2020.3.49f1 2021.3.45f2 2022.3.62f3 6000.0.81f1"
-```
-
-`DOCKER_IMAGE` names the image. Scripts tag the result as `tmp/compose-unity:latest`.
-
-The test configuration:
-
-- Forwards Unity and email credentials from the host environment.
-- Mounts the `unity-binaries` named volume at the platform-specific Unity editor directory.
-- Adds process isolation, DirectX device passthrough, and `UNITY_NO_GRAPHICS=0` when the Windows GPU profile is selected.
-- Creates an empty project with the latest pinned LTS patch from each major
-  Unity line starting with 2019: `2019.4.41f2`, `2020.3.49f1`,
-  `2021.3.45f2`, `2022.3.62f3`, and `6000.0.81f1`.
-- Runs the same version sequence on Linux and Windows and stops at the first
-  failed editor installation or project creation.
-
-Credential values are forwarded at runtime and are not stored in `.env` or baked into the image.
-
-## Batch Scripts
-
-The OS-specific scripts are intended to be launched from Windows Explorer and pause before closing:
-
-```text
-docker-build-linux.bat
-docker-build-windows.bat
-docker-test-linux.bat
-docker-test-windows.bat
-docker-test-windows-gpu.bat
-```
-
-They delegate to the shared scripts with `linux` or `windows` as the first argument. The shared scripts can also be called directly:
-
-```bat
-docker-build.bat linux
-docker-build.bat windows
-docker-test.bat linux
-docker-test.bat windows
-```
-
-Calling `docker-build.bat` or `docker-test.bat` without an argument omits `--context` and derives the container OS from the active Docker daemon.
-
-## Reconstructed Commands
-
-The Linux build script resolves to:
-
-```text
-docker --context linux build --tag tmp/compose-unity:latest --file linux/Dockerfile .
-```
-
-The Linux image installs Node.js 24, .NET SDK 9.0, and `slothsoft/unity ^2.21`
-by default. Override them with the `NODE_VERSION`, `DOTNET_VERSION`, and
-`SLOTHSOFT_UNITY_VERSION` build arguments; the Node.js and .NET selections are
-also available under the same names inside the resulting image:
-
-```text
-docker --context linux build --build-arg NODE_VERSION=24 --build-arg DOTNET_VERSION=9.0 --build-arg SLOTHSOFT_UNITY_VERSION=2.21 --tag tmp/compose-unity:latest --file linux/Dockerfile .
-```
-
-The Windows build script resolves to:
-
-```text
-docker --context windows build --tag tmp/compose-unity:latest --file windows/Dockerfile .
-```
-
-The Windows image installs .NET SDK 9.0 and `slothsoft/unity ^2.21` by default.
-Override them with the `DOTNET_VERSION` and `SLOTHSOFT_UNITY_VERSION` build
-arguments; the .NET selection is also available under the same name inside the
-resulting image:
-
-```text
-docker --context windows build --build-arg DOTNET_VERSION=9.0 --build-arg SLOTHSOFT_UNITY_VERSION=2.21 --tag tmp/compose-unity:latest --file windows/Dockerfile .
-```
-
-To build the Windows 20H2 variant explicitly, add `--build-arg OS_BASE=20H2`.
-
-GitHub Actions publishes the Windows variants as `latest-windows-20H2` and
-`latest-windows-1809`. The `latest` manifest lists 20H2 before 1809 so newer
-Hyper-V-capable hosts prefer 20H2 while 1809 hosts fall back to their compatible
-image.
-
-For each version in `DOCKER_TEST_VERSIONS`, the Linux test script reconstructs:
-
-```text
-docker --context linux run --rm --env UNITY_CREDENTIALS_USR --env UNITY_CREDENTIALS_PSW --env EMAIL_CREDENTIALS_USR --env EMAIL_CREDENTIALS_PSW -v "unity-binaries:/root/Unity" tmp/compose-unity:latest compose-unity exec unity-empty-project test VERSION
-```
-
-For each version in `DOCKER_TEST_VERSIONS`, the Windows test script reconstructs:
-
-```text
-docker --context windows run --rm --env UNITY_CREDENTIALS_USR --env UNITY_CREDENTIALS_PSW --env EMAIL_CREDENTIALS_USR --env EMAIL_CREDENTIALS_PSW -v "unity-binaries:C:/Program Files/Unity/Hub/Editor" tmp/compose-unity:latest compose-unity exec unity-empty-project test VERSION
-```
-
-The batch scripts load the quoted values from `.env`, remove the surrounding quotes, and decode `\"` before passing the arguments to Docker.
-
-`docker-test-windows-gpu.bat` adds the Windows GPU profile from
-`DOCKER_TEST_ARGS_WINDOWS_GPU`. The `windows` context must target a host that
-can run the selected Windows image with process isolation and GPU passthrough.
-
-## Windows GPU Acceleration
-
-The Windows image defaults to `UNITY_NO_GRAPHICS=1` so it remains usable on
-GPU-less and Hyper-V-isolated hosts. Opt in to DirectX GPU acceleration by
-using process isolation, exposing the DirectX device interface class, and
-setting `UNITY_NO_GRAPHICS=0`:
-
-```text
-docker --context windows run --rm --isolation process `
-  --device "class/5B45201D-F2F2-4F3B-85BB-30FF1F953599" `
-  --env UNITY_NO_GRAPHICS=0 `
-  tmp/compose-unity:latest `
-  compose-unity exec unity-empty-project test 2021.3.45f1
-```
-
-Equivalent Compose service configuration:
+On Windows:
 
 ```yaml
 services:
   compose-unity:
     image: faulo/compose-unity:latest
-    isolation: process
     environment:
       UNITY_NO_GRAPHICS: 0
+    isolation: process
     devices:
       - "class/5B45201D-F2F2-4F3B-85BB-30FF1F953599"
 ```
 
-The host and image must meet Microsoft's
-[Windows container GPU prerequisites](https://learn.microsoft.com/en-us/virtualization/windowscontainers/deploy-containers/gpu-acceleration),
-including compatible Windows versions, Docker 19.03 or newer, and a WDDM 2.5
-or newer display driver. GPU acceleration is unavailable with Hyper-V
-isolation. Process isolation also requires a host compatible with the selected
-`1809` or `20H2` image variant.
+On Linux:
 
-A successful Unity launch logs `GfxDevice: creating device client` followed by
-the Direct3D version, hardware renderer, VRAM, and driver. Unity Editor system
-requirements still apply independently; newer Editor releases may not support
-the Windows versions used by these image variants.
+```yaml
+services:
+  compose-unity:
+    image: faulo/compose-unity:latest
+    environment:
+      UNITY_NO_GRAPHICS: 0
+    gpus: all
+```
+
+See the platform documentation for
+[Windows container GPU acceleration](https://learn.microsoft.com/en-us/virtualization/windowscontainers/deploy-containers/gpu-acceleration),
+[Docker GPU access](https://docs.docker.com/engine/containers/gpu/), and the
+[Compose `gpus` attribute](https://docs.docker.com/reference/compose-file/services/#gpus).
 
 ## Volumes and Licensing
 

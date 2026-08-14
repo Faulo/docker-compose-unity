@@ -50,9 +50,12 @@ ARG DOTNET_VERSION=9.0
 ENV DOTNET_VERSION="${DOTNET_VERSION}"
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
 ENV DOTNET_CLI_UI_LANGUAGE=en
+ARG NODE_VERSION=24
+ENV NODE_VERSION="${NODE_VERSION}"
 ARG BLENDER_SERIES=4.5
 COPY windows/compose-unity.nuspec compose-unity.nuspec
 RUN if ($env:DOTNET_VERSION -notmatch '^\d+\.\d+$') { throw "Invalid .NET SDK feature version: $env:DOTNET_VERSION" }; \
+    if ($env:NODE_VERSION -notmatch '^\d+$') { throw "Invalid Node.js major version: $env:NODE_VERSION" }; \
     $seriesMatch = [regex]::Match($env:BLENDER_SERIES, '^(?<major>\d+)\.(?<minor>\d+)$'); \
     if (-not $seriesMatch.Success) { throw "Invalid Blender series: $env:BLENDER_SERIES" }; \
     $nextSeries = '{0}.{1}' -f $seriesMatch.Groups['major'].Value, ([int]$seriesMatch.Groups['minor'].Value + 1); \
@@ -60,6 +63,9 @@ RUN if ($env:DOTNET_VERSION -notmatch '^\d+\.\d+$') { throw "Invalid .NET SDK fe
     $dotnetDependencies = @($packageSpec.package.metadata.dependencies.dependency | Where-Object id -like 'dotnet-*-sdk'); \
     if ($dotnetDependencies.Count -ne 1) { throw "Expected one .NET SDK dependency, found $($dotnetDependencies.Count)" }; \
     $dotnetDependencies[0].SetAttribute('id', 'dotnet-' + $env:DOTNET_VERSION + '-sdk'); \
+    $nodeDependencies = @($packageSpec.package.metadata.dependencies.dependency | Where-Object id -eq 'nodejs'); \
+    if ($nodeDependencies.Count -ne 1) { throw "Expected one Node.js dependency, found $($nodeDependencies.Count)" }; \
+    $nodeDependencies[0].SetAttribute('version', '[' + $env:NODE_VERSION + ',' + ([int]$env:NODE_VERSION + 1) + ')'); \
     $blenderDependencies = @($packageSpec.package.metadata.dependencies.dependency | Where-Object id -eq 'blender'); \
     if ($blenderDependencies.Count -ne 1) { throw "Expected one Blender dependency, found $($blenderDependencies.Count)" }; \
     $blenderDependencies[0].SetAttribute('version', '[' + $env:BLENDER_SERIES + ',' + $nextSeries + ')'); \
@@ -227,6 +233,15 @@ RUN git config --global --add safe.directory *; \
     if ($LASTEXITCODE -ne 0) { throw 'Butler smoke check failed' }; \
     npm --version; \
     if ($LASTEXITCODE -ne 0) { throw 'npm smoke check failed' }; \
+    $installedNodeVersion = node --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Node.js smoke check failed' }; \
+    if ($installedNodeVersion -notmatch ('^v' + [regex]::Escape($env:NODE_VERSION) + '\.')) { throw "Unexpected Node.js version: $installedNodeVersion" }; \
+    git lfs version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Git LFS smoke check failed' }; \
+    python --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Python smoke check failed' }; \
+    ffmpeg -version; \
+    if ($LASTEXITCODE -ne 0) { throw 'FFmpeg smoke check failed' }; \
     dotnet --version; \
     if ($LASTEXITCODE -ne 0) { throw '.NET smoke check failed' }
 
@@ -307,7 +322,7 @@ ENV COMPOSE_UNITY_CALL_TIMEOUT=86400
 ENV COMPOSE_UNITY_MCP=0
 
 ARG UNITY_TIMEOUT="14400"
-ARG SLOTHSOFT_UNITY_VERSION=2.21
+ARG SLOTHSOFT_UNITY_VERSION=2.22
 RUN compose-unity require ('slothsoft/unity:^' + $env:SLOTHSOFT_UNITY_VERSION); \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to require slothsoft/unity' }; \
     compose-unity config process-timeout $env:UNITY_TIMEOUT; \
@@ -323,18 +338,24 @@ RUN compose-unity exec unity-build; \
     Remove-Item -LiteralPath C:\ProgramData\compose-unity -Recurse -Force
 
 ARG POWERSHELL_VERSION=7.6.4
-ARG POWERSHELL_SHA256=80832551c52809301e6071c8bac977beb5a2f1ec953eb4db9f94deb953333793
-# The ZIP package works in Windows containers and avoids installer side effects.
-RUN $archive = 'C:\powershell.zip'; \
-    $uri = 'https://github.com/PowerShell/PowerShell/releases/download/v' + $env:POWERSHELL_VERSION + '/PowerShell-' + $env:POWERSHELL_VERSION + '-win-x64.zip'; \
+# The ZIP package avoids installer side effects; its release manifest supplies
+# the checksum so POWERSHELL_VERSION can select any release with these assets.
+RUN $archiveName = 'PowerShell-' + $env:POWERSHELL_VERSION + '-win-x64.zip'; \
+    $releaseUri = 'https://github.com/PowerShell/PowerShell/releases/download/v' + $env:POWERSHELL_VERSION; \
+    $archive = 'C:\powershell.zip'; \
+    $hashes = 'C:\powershell-hashes.sha256'; \
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
-    (New-Object Net.WebClient).DownloadFile($uri, $archive); \
+    (New-Object Net.WebClient).DownloadFile(($releaseUri + '/' + $archiveName), $archive); \
+    (New-Object Net.WebClient).DownloadFile(($releaseUri + '/hashes.sha256'), $hashes); \
+    $hashLines = @(Get-Content -LiteralPath $hashes | Where-Object { $_ -match ('^[0-9a-fA-F]{64} \*' + [regex]::Escape($archiveName) + '$') }); \
+    if ($hashLines.Count -ne 1) { throw "Expected one PowerShell checksum for $archiveName, found $($hashLines.Count)" }; \
+    $expectedHash = ($hashLines[0] -split '\s+', 2)[0]; \
     $actualHash = (Get-FileHash -Algorithm SHA256 $archive).Hash; \
-    if ($actualHash -ne $env:POWERSHELL_SHA256) { throw "PowerShell package checksum mismatch: $actualHash" }; \
+    if ($actualHash -ne $expectedHash) { throw "PowerShell package checksum mismatch: expected $expectedHash, got $actualHash" }; \
     $destination = 'C:\Program Files\PowerShell\7'; \
     New-Item -ItemType Directory -Force $destination | Out-Null; \
     Expand-Archive -LiteralPath $archive -DestinationPath $destination; \
-    Remove-Item -LiteralPath $archive; \
+    Remove-Item -LiteralPath $archive, $hashes; \
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
     [Environment]::SetEnvironmentVariable('Path', $destination + ';' + $machinePath, 'Machine'); \
     & "$destination\pwsh.exe" -NoLogo -NoProfile -Command 'if ($PSVersionTable.PSVersion.ToString() -ne $env:POWERSHELL_VERSION) { exit 1 }'; \

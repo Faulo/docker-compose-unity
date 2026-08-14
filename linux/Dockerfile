@@ -220,7 +220,7 @@ ENV COMPOSE_UNITY_CALL_TIMEOUT="86400"
 ENV COMPOSE_UNITY_MCP="0"
 
 ARG UNITY_TIMEOUT="14400"
-ARG SLOTHSOFT_UNITY_VERSION=2.21
+ARG SLOTHSOFT_UNITY_VERSION=2.22
 RUN install -m 0755 -d /compose-unity && \
     compose-unity require "slothsoft/unity:^${SLOTHSOFT_UNITY_VERSION}" && \
     compose-unity config process-timeout "$UNITY_TIMEOUT" && \
