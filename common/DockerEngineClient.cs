@@ -6,6 +6,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+namespace ComposeUnity;
+
 sealed class DockerEngineClient : IAsyncDisposable {
     static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -30,7 +32,7 @@ sealed class DockerEngineClient : IAsyncDisposable {
     internal async Task<JsonObject?> TryInspectContainerAsync(string idOrName, CancellationToken cancellationToken) {
         try {
             return await InspectContainerAsync(idOrName, cancellationToken);
-        } catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotFound) {
+        } catch (DockerApiException exception) when (exception.statusCode == HttpStatusCode.NotFound) {
             return null;
         }
     }
@@ -71,7 +73,7 @@ sealed class DockerEngineClient : IAsyncDisposable {
                 $"/containers/{Escape(idOrName)}/stop?t={seconds}",
                 null,
                 cancellationToken);
-        } catch (DockerApiException exception) when (exception.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.NotModified) {
+        } catch (DockerApiException exception) when (exception.statusCode is HttpStatusCode.NotFound or HttpStatusCode.NotModified) {
         }
     }
 
@@ -89,7 +91,7 @@ sealed class DockerEngineClient : IAsyncDisposable {
         string path = $"/containers/{Escape(idOrName)}?force={(force ? 1 : 0)}&v={(removeVolumes ? 1 : 0)}";
         try {
             await SendNoContentAsync(HttpMethod.Delete, path, null, cancellationToken);
-        } catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotFound) {
+        } catch (DockerApiException exception) when (exception.statusCode == HttpStatusCode.NotFound) {
         }
     }
 
@@ -134,9 +136,9 @@ sealed class DockerEngineClient : IAsyncDisposable {
         return new ExecResult(
             execId,
             exitCode,
-            output.StandardOutput,
-            output.StandardError,
-            output.CombinedOutput);
+            output.standardOutput,
+            output.standardError,
+            output.combinedOutput);
     }
 
     async Task<JsonObject> GetObjectAsync(string path, CancellationToken cancellationToken) {
@@ -335,14 +337,14 @@ sealed class DockerEngineClient : IAsyncDisposable {
 
 sealed class DockerApiException(HttpStatusCode statusCode, string? message)
     : InvalidOperationException($"Docker Engine returned {(int)statusCode}: {message}") {
-    internal HttpStatusCode StatusCode { get; } = statusCode;
+    internal HttpStatusCode statusCode { get; } = statusCode;
 }
 
-sealed record CapturedOutput(string StandardOutput, string StandardError, string CombinedOutput);
+sealed record CapturedOutput(string standardOutput, string standardError, string combinedOutput);
 
 sealed record ExecResult(
-    string Id,
-    int ExitCode,
-    string StandardOutput,
-    string StandardError,
-    string CombinedOutput);
+    string id,
+    int exitCode,
+    string standardOutput,
+    string standardError,
+    string combinedOutput);

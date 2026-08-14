@@ -8,8 +8,10 @@ using System.Text.Json.Nodes;
 using System.Xml;
 using System.Xml.Linq;
 
+namespace ComposeUnity;
+
 sealed class UnityMcpController : IAsyncDisposable {
-    const string LabelPrefix = "net.slothsoft.compose-unity";
+    const string LABEL_PREFIX = "net.slothsoft.compose-unity";
     static readonly TimeSpan WorkerStopTimeout = TimeSpan.FromSeconds(10);
 
     static readonly string[] ForwardedEnvironmentNames = [
@@ -138,21 +140,21 @@ sealed class UnityMcpController : IAsyncDisposable {
     internal async Task<object> ProjectInfoAsync(string projectRoot, CancellationToken cancellationToken) {
         var started = DateTimeOffset.UtcNow;
         var project = await GetProjectAsync(projectRoot, cancellationToken);
-        LogStart("project_info", project.Id);
+        LogStart("project_info", project.id);
         try {
             return new {
-                projectRoot = project.NormalizedRoot,
-                companyName = project.Probe.CompanyName,
-                projectName = project.Probe.ProjectName,
-                projectVersion = project.Probe.ProjectVersion,
-                editor = new { version = project.Probe.EditorVersion, revision = project.Probe.EditorRevision },
-                code = new { apiCompatibility = project.Probe.ApiCompatibility, allowUnsafeCode = project.Probe.AllowUnsafeCode, scriptingBackendOverrides = project.Probe.ScriptingBackendOverrides },
-                rendering = new { renderPipeline = project.Probe.RenderPipeline, colorSpace = project.Probe.ColorSpace, graphicsApis = project.Probe.GraphicsApis },
-                inputHandling = project.Probe.InputHandling,
-                packages = project.Probe.Packages
+                projectRoot = project.normalizedRoot,
+                project.probe.companyName,
+                project.probe.projectName,
+                project.probe.projectVersion,
+                editor = new { version = project.probe.editorVersion, revision = project.probe.editorRevision },
+                code = new { project.probe.apiCompatibility, project.probe.allowUnsafeCode, project.probe.scriptingBackendOverrides },
+                rendering = new { project.probe.renderPipeline, project.probe.colorSpace, project.probe.graphicsApis },
+                project.probe.inputHandling,
+                project.probe.packages
             };
         } finally {
-            LogEnd("project_info", project.Id, started);
+            LogEnd("project_info", project.id, started);
         }
     }
 
@@ -196,7 +198,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         }
 
         arguments ??= [];
-        if (arguments.Length > 256 || arguments.Any(argument => argument is null || argument.Length > 16_384)) {
+        if (arguments.Length > 256 || arguments.Any(argument => argument.Length > 16_384)) {
             throw new ArgumentException("arguments accepts at most 256 values of at most 16384 characters each.", nameof(arguments));
         }
 
@@ -214,7 +216,7 @@ sealed class UnityMcpController : IAsyncDisposable {
             };
             command.AddRange(arguments);
             var result = await ExecuteWorkerAsync(worker, command, token);
-            return new { exitStatus = result.ExitCode, output = RelevantOutput(result.StandardOutput), errorOutput = RelevantOutput(result.StandardError) };
+            return new { exitStatus = result.exitCode, output = RelevantOutput(result.standardOutput), errorOutput = RelevantOutput(result.standardError) };
         }, cancellationToken);
     }
 
@@ -233,17 +235,17 @@ sealed class UnityMcpController : IAsyncDisposable {
         string tool,
         Func<WorkerContainer, CancellationToken, Task<object>> operation,
         CancellationToken cancellationToken) {
-        var lane = lanes.GetOrAdd(project.Id, _ => new AsyncFifoLock());
+        var lane = lanes.GetOrAdd(project.id, _ => new AsyncFifoLock());
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stoppingToken);
         await using var laneLease = await lane.AcquireAsync(linked.Token);
         await using var daemonLease = await AcquireDaemonLockAsync(project, linked.Token);
         var started = DateTimeOffset.UtcNow;
-        LogStart(tool, project.Id);
+        LogStart(tool, project.id);
         try {
             var worker = await EnsureWorkerAsync(project, linked.Token);
             return await operation(worker, linked.Token);
         } finally {
-            LogEnd(tool, project.Id, started);
+            LogEnd(tool, project.id, started);
         }
     }
 
@@ -251,14 +253,14 @@ sealed class UnityMcpController : IAsyncDisposable {
         WorkerContainer worker,
         IReadOnlyList<string> command,
         CancellationToken cancellationToken) {
-        activeWorkers.TryAdd(worker.Id, 0);
+        activeWorkers.TryAdd(worker.id, 0);
         try {
-            return await docker.ExecAsync(worker.Id, WorkerProjectRoot, command, cancellationToken);
+            return await docker.ExecAsync(worker.id, WorkerProjectRoot, command, cancellationToken);
         } catch (OperationCanceledException) {
-            await docker.StopContainerAsync(worker.Id, WorkerStopTimeout, CancellationToken.None);
+            await docker.StopContainerAsync(worker.id, WorkerStopTimeout, CancellationToken.None);
             throw;
         } finally {
-            activeWorkers.TryRemove(worker.Id, out _);
+            activeWorkers.TryRemove(worker.id, out _);
         }
     }
 
@@ -309,7 +311,7 @@ sealed class UnityMcpController : IAsyncDisposable {
             var inspected = await docker.InspectContainerAsync(containerId, cancellationToken);
             var output = await docker.ContainerLogsAsync(containerId, cancellationToken);
             if (exitCode != 0) {
-                string detail = RelevantOutput(output.StandardError);
+                string detail = RelevantOutput(output.standardError);
                 throw new InvalidOperationException(string.IsNullOrWhiteSpace(detail)
                     ? "the validation probe failed without diagnostic output"
                     : detail);
@@ -323,7 +325,7 @@ sealed class UnityMcpController : IAsyncDisposable {
                                     ?? throw new InvalidOperationException("Docker did not report the normalized project source path.");
             normalizedRoot = NormalizeDaemonPath(normalizedRoot);
             var probe = JsonSerializer.Deserialize<ProjectProbeResult>(
-                            output.StandardOutput,
+                            output.standardOutput,
                             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                         ?? throw new InvalidOperationException("the project validation probe returned no project information");
             return new ValidatedProject(normalizedRoot, Hash(ProjectIdentityPath(normalizedRoot)), probe);
@@ -339,13 +341,13 @@ sealed class UnityMcpController : IAsyncDisposable {
     }
 
     async Task<WorkerContainer> EnsureWorkerAsync(ValidatedProject project, CancellationToken cancellationToken) {
-        string name = $"compose-unity-worker-{project.Id[..16]}-{imageHash}";
+        string name = $"compose-unity-worker-{project.id[..16]}-{imageHash}";
         var inspected = await docker.TryInspectContainerAsync(name, cancellationToken);
         bool reused = inspected is not null;
         if (inspected is null) {
             try {
                 await docker.CreateContainerAsync(name, BuildWorkerConfiguration(project), cancellationToken);
-            } catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.Conflict) {
+            } catch (DockerApiException exception) when (exception.statusCode == HttpStatusCode.Conflict) {
             }
 
             inspected = await docker.InspectContainerAsync(name, cancellationToken);
@@ -355,7 +357,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         if (inspected["State"]?["Running"]?.GetValue<bool>() != true) {
             try {
                 await docker.StartContainerAsync(name, cancellationToken);
-            } catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotModified) {
+            } catch (DockerApiException exception) when (exception.statusCode == HttpStatusCode.NotModified) {
             }
         }
 
@@ -369,7 +371,8 @@ sealed class UnityMcpController : IAsyncDisposable {
         var hostConfiguration = new JsonObject();
         var selfHostConfiguration = self["HostConfig"]?.AsObject() ?? new JsonObject();
         foreach (string name in InheritedHostConfigurationNames) {
-            if (selfHostConfiguration[name] is JsonNode value) {
+            JsonNode? value = selfHostConfiguration[name];
+            if (value is not null) {
                 hostConfiguration[name] = value.DeepClone();
             }
         }
@@ -377,7 +380,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         hostConfiguration["Mounts"] = BuildWorkerMounts(project);
 
         var labels = Labels("worker", project);
-        labels[$"{LabelPrefix}.image"] = imageId;
+        labels[$"{LABEL_PREFIX}.image"] = imageId;
         return new JsonObject { ["Image"] = imageId, ["Env"] = ForwardedEnvironment(), ["Labels"] = labels, ["HostConfig"] = hostConfiguration };
     }
 
@@ -386,7 +389,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         foreach (string directory in new[] { "Assets", "Packages", "ProjectSettings" }) {
             mounts.Add(new JsonObject {
                 ["Type"] = "bind",
-                ["Source"] = CombineDaemonPath(project.NormalizedRoot, directory),
+                ["Source"] = CombineDaemonPath(project.normalizedRoot, directory),
                 ["Target"] = CombineContainerPath(WorkerProjectRoot, directory),
                 ["ReadOnly"] = false,
                 ["BindOptions"] = new JsonObject { ["CreateMountpoint"] = false }
@@ -454,8 +457,8 @@ sealed class UnityMcpController : IAsyncDisposable {
 
     void ValidateWorker(JsonObject worker, ValidatedProject project) {
         var labels = worker["Config"]?["Labels"]?.AsObject();
-        if (labels?[$"{LabelPrefix}.kind"]?.GetValue<string>() != "worker"
-            || labels[$"{LabelPrefix}.project"]?.GetValue<string>() != project.Id
+        if (labels?[$"{LABEL_PREFIX}.kind"]?.GetValue<string>() != "worker"
+            || labels[$"{LABEL_PREFIX}.project"]?.GetValue<string>() != project.id
             || worker["Image"]?.GetValue<string>() != imageId) {
             throw new InvalidOperationException("A conflicting container occupies the reserved MCP worker name.");
         }
@@ -464,25 +467,25 @@ sealed class UnityMcpController : IAsyncDisposable {
     async ValueTask<IAsyncDisposable> AcquireDaemonLockAsync(
         ValidatedProject project,
         CancellationToken cancellationToken) {
-        string name = $"compose-unity-lock-{project.Id[..32]}";
+        string name = $"compose-unity-lock-{project.id[..32]}";
         while (true) {
             try {
                 var configuration = new JsonObject { ["Image"] = imageId, ["Labels"] = Labels("lock", project) };
                 await docker.CreateContainerAsync(name, configuration, cancellationToken);
                 return new DockerContainerLease(docker, name);
-            } catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.Conflict) {
+            } catch (DockerApiException exception) when (exception.statusCode == HttpStatusCode.Conflict) {
                 var existing = await docker.TryInspectContainerAsync(name, cancellationToken);
                 if (existing is null) {
                     continue;
                 }
 
                 var labels = existing["Config"]?["Labels"]?.AsObject();
-                if (labels?[$"{LabelPrefix}.kind"]?.GetValue<string>() != "lock"
-                    || labels[$"{LabelPrefix}.project"]?.GetValue<string>() != project.Id) {
+                if (labels?[$"{LABEL_PREFIX}.kind"]?.GetValue<string>() != "lock"
+                    || labels[$"{LABEL_PREFIX}.project"]?.GetValue<string>() != project.id) {
                     throw new InvalidOperationException("A conflicting container occupies the reserved MCP project lock name.");
                 }
 
-                string? owner = labels[$"{LabelPrefix}.controller"]?.GetValue<string>();
+                string? owner = labels[$"{LABEL_PREFIX}.controller"]?.GetValue<string>();
                 var ownerContainer = string.IsNullOrWhiteSpace(owner)
                     ? null
                     : await docker.TryInspectContainerAsync(owner, cancellationToken);
@@ -497,10 +500,10 @@ sealed class UnityMcpController : IAsyncDisposable {
     }
 
     JsonObject Labels(string kind, ValidatedProject? project) {
-        var labels = new JsonObject { [$"{LabelPrefix}.kind"] = kind, [$"{LabelPrefix}.controller"] = controllerId };
+        var labels = new JsonObject { [$"{LABEL_PREFIX}.kind"] = kind, [$"{LABEL_PREFIX}.controller"] = controllerId };
         if (project is not null) {
-            labels[$"{LabelPrefix}.project"] = project.Id;
-            labels[$"{LabelPrefix}.project-root"] = project.NormalizedRoot;
+            labels[$"{LABEL_PREFIX}.project"] = project.id;
+            labels[$"{LABEL_PREFIX}.project-root"] = project.normalizedRoot;
         }
 
         return labels;
@@ -508,7 +511,7 @@ sealed class UnityMcpController : IAsyncDisposable {
 
     static object BuildTestResult(ExecResult result) {
         try {
-            var document = XDocument.Parse(result.StandardOutput, LoadOptions.None);
+            var document = XDocument.Parse(result.standardOutput, LoadOptions.None);
             var suites = document.Descendants("testsuite").ToList();
             if (suites.Count == 0) {
                 throw new InvalidOperationException("The JUnit report contains no test suites.");
@@ -535,14 +538,14 @@ sealed class UnityMcpController : IAsyncDisposable {
                 })
                 .ToList();
 
-            if (failureCount == 0 && errorCount == 0 && result.ExitCode != 0) {
+            if (failureCount == 0 && errorCount == 0 && result.exitCode != 0) {
                 return ErrorTestResult(result);
             }
 
             string outcome = failureCount == 0 && errorCount == 0 ? "passed" : "failed";
             return new {
                 outcome,
-                exitCode = result.ExitCode,
+                result.exitCode,
                 counts = new {
                     total,
                     passed = Math.Max(0, total - failureCount - errorCount - skipped),
@@ -559,7 +562,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         }
     }
 
-    static object ErrorTestResult(ExecResult result) => new { outcome = "error", exitCode = result.ExitCode, log = result.CombinedOutput };
+    static object ErrorTestResult(ExecResult result) => new { outcome = "error", result.exitCode, log = result.combinedOutput };
 
     static int AttributeSum(IReadOnlyList<XElement> suites, string name, int fallback) {
         if (suites.Count == 0 || suites.Any(suite => suite.Attribute(name) is null)) {
@@ -613,9 +616,9 @@ sealed class UnityMcpController : IAsyncDisposable {
         Console.WriteLine($"MCP END tool={tool} project={project[..12]} duration={(DateTimeOffset.UtcNow - started).TotalSeconds:F1}s");
 }
 
-sealed record ValidatedProject(string NormalizedRoot, string Id, ProjectProbeResult Probe);
+sealed record ValidatedProject(string normalizedRoot, string id, ProjectProbeResult probe);
 
-sealed record WorkerContainer(string Id, string Name, bool Reused);
+sealed record WorkerContainer(string id, string name, bool reused);
 
 sealed class DockerContainerLease(DockerEngineClient docker, string name) : IAsyncDisposable {
     public async ValueTask DisposeAsync() =>
@@ -636,7 +639,7 @@ sealed class AsyncFifoLock {
 
             var waiter = new Waiter(this, cancellationToken);
             waiters.Enqueue(waiter);
-            return new ValueTask<IAsyncDisposable>(waiter.Task);
+            return new ValueTask<IAsyncDisposable>(waiter.task);
         }
     }
 
@@ -662,7 +665,7 @@ sealed class AsyncFifoLock {
             registration = cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
         }
 
-        internal Task<IAsyncDisposable> Task {
+        internal Task<IAsyncDisposable> task {
             get => completion.Task;
         }
 

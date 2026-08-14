@@ -9,6 +9,8 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
+namespace ComposeUnity;
+
 static class McpActivation {
     internal static bool Parse() {
         string? value = Environment.GetEnvironmentVariable("COMPOSE_UNITY_MCP");
@@ -34,10 +36,10 @@ sealed class McpServerRuntime : IAsyncDisposable {
         this.application = application;
         this.controller = controller;
         this.stopping = stopping;
-        Completion = completion;
+        this.completion = completion;
     }
 
-    internal Task Completion { get; }
+    internal Task completion { get; }
 
     public async ValueTask DisposeAsync() {
         await StopAsync();

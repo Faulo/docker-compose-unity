@@ -3,6 +3,8 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+namespace ComposeUnity;
+
 static class ProjectProbe {
     static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -39,21 +41,21 @@ static class ProjectProbe {
             string[] settings = File.ReadAllLines(settingsPath);
 
             Console.WriteLine(JsonSerializer.Serialize(new ProjectProbeResult {
-                CompanyName = ReadRequiredSetting(settings, "companyName"),
-                ProjectName = ReadRequiredSetting(settings, "productName"),
-                ProjectVersion = ReadRequiredSetting(settings, "bundleVersion"),
-                EditorVersion = editorVersion,
-                EditorRevision = ReadRevision(editorVersionWithRevision),
-                ApiCompatibility = ApiCompatibility(
+                companyName = ReadRequiredSetting(settings, "companyName"),
+                projectName = ReadRequiredSetting(settings, "productName"),
+                projectVersion = ReadRequiredSetting(settings, "bundleVersion"),
+                editorVersion = editorVersion,
+                editorRevision = ReadRevision(editorVersionWithRevision),
+                apiCompatibility = ApiCompatibility(
                     ReadRequiredIntegerSetting(settings, "apiCompatibilityLevel"),
                     editorVersion),
-                AllowUnsafeCode = ReadRequiredIntegerSetting(settings, "allowUnsafeCode") != 0,
-                ScriptingBackendOverrides = ReadEnumMap(settings, "scriptingBackend", ScriptingBackend),
-                RenderPipeline = RenderPipeline(projectRoot, manifest),
-                ColorSpace = ColorSpace(ReadRequiredIntegerSetting(settings, "m_ActiveColorSpace")),
-                GraphicsApis = ReadGraphicsApis(settings),
-                InputHandling = InputHandling(ReadRequiredIntegerSetting(settings, "activeInputHandler")),
-                Packages = manifest
+                allowUnsafeCode = ReadRequiredIntegerSetting(settings, "allowUnsafeCode") != 0,
+                scriptingBackendOverrides = ReadEnumMap(settings, "scriptingBackend", ScriptingBackend),
+                renderPipeline = RenderPipeline(projectRoot, manifest),
+                colorSpace = ColorSpace(ReadRequiredIntegerSetting(settings, "m_ActiveColorSpace")),
+                graphicsApis = ReadGraphicsApis(settings),
+                inputHandling = InputHandling(ReadRequiredIntegerSetting(settings, "activeInputHandler")),
+                packages = manifest
             }, JsonOptions));
             return 0;
         } catch (Exception exception) {
@@ -146,7 +148,7 @@ static class ProjectProbe {
             return;
         }
 
-        result[buildTarget] = new GraphicsApiSettings { Automatic = automatic ?? true, Apis = DecodeGraphicsApis(serializedApis) };
+        result[buildTarget] = new GraphicsApiSettings { automatic = automatic ?? true, apis = DecodeGraphicsApis(serializedApis) };
     }
 
     static string[] DecodeGraphicsApis(string? serialized) {
@@ -323,22 +325,22 @@ static class ProjectProbe {
 }
 
 sealed class ProjectProbeResult {
-    public string CompanyName { get; set; } = string.Empty;
-    public string ProjectName { get; set; } = string.Empty;
-    public string ProjectVersion { get; set; } = string.Empty;
-    public string EditorVersion { get; set; } = string.Empty;
-    public string? EditorRevision { get; set; }
-    public string ApiCompatibility { get; set; } = string.Empty;
-    public bool AllowUnsafeCode { get; set; }
-    public Dictionary<string, string> ScriptingBackendOverrides { get; set; } = new(StringComparer.Ordinal);
-    public string RenderPipeline { get; set; } = string.Empty;
-    public string ColorSpace { get; set; } = string.Empty;
-    public Dictionary<string, GraphicsApiSettings> GraphicsApis { get; set; } = new(StringComparer.Ordinal);
-    public string InputHandling { get; set; } = string.Empty;
-    public JsonNode Packages { get; set; } = new JsonObject();
+    public string companyName { get; set; } = string.Empty;
+    public string projectName { get; set; } = string.Empty;
+    public string projectVersion { get; set; } = string.Empty;
+    public string editorVersion { get; set; } = string.Empty;
+    public string? editorRevision { get; set; }
+    public string apiCompatibility { get; set; } = string.Empty;
+    public bool allowUnsafeCode { get; set; }
+    public Dictionary<string, string> scriptingBackendOverrides { get; set; } = new(StringComparer.Ordinal);
+    public string renderPipeline { get; set; } = string.Empty;
+    public string colorSpace { get; set; } = string.Empty;
+    public Dictionary<string, GraphicsApiSettings> graphicsApis { get; set; } = new(StringComparer.Ordinal);
+    public string inputHandling { get; set; } = string.Empty;
+    public JsonNode packages { get; set; } = new JsonObject();
 }
 
 sealed class GraphicsApiSettings {
-    public bool Automatic { get; set; }
-    public string[] Apis { get; set; } = [];
+    public bool automatic { get; set; }
+    public string[] apis { get; set; } = [];
 }

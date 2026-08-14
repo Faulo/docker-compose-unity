@@ -4,8 +4,10 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 
+namespace ComposeUnity;
+
 static class Program {
-    const long DefaultTimeoutSeconds = 86_400;
+    const long DEFAULT_TIMEOUT_SECONDS = 86_400;
     static readonly TimeSpan TerminationGracePeriod = TimeSpan.FromSeconds(10);
 
     public static async Task<int> Main(string[] args) {
@@ -60,22 +62,22 @@ static class Program {
         try {
             child = ProcessTree.StartComposer(args, invocationId);
             record = new InvocationRecord {
-                Id = invocationId,
-                Command = command,
-                WorkingDirectory = workingDirectory,
-                StartedAtUtc = startedAt,
-                TimeoutSeconds = timeoutSeconds,
-                DeadlineUtc = deadline,
-                Launcher = ProcessIdentity.Current(),
-                RootProcess = ProcessIdentity.FromProcess(child.Process),
-                ProcessGroupId = child.ProcessGroupId,
-                JobName = child.JobName
+                id = invocationId,
+                command = command,
+                workingDirectory = workingDirectory,
+                startedAtUtc = startedAt,
+                timeoutSeconds = timeoutSeconds,
+                deadlineUtc = deadline,
+                launcher = ProcessIdentity.Current(),
+                rootProcess = ProcessIdentity.FromProcess(child.process),
+                processGroupId = child.processGroupId,
+                jobName = child.jobName
             };
             store.WriteActive(record);
             store.WriteEvent(LifecycleEvent.Start(record));
             child.Resume();
 
-            var processExit = child.Process.WaitForExitAsync();
+            var processExit = child.process.WaitForExitAsync();
             var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellation.Token);
             var timeoutTask = timeoutSeconds == 0
                 ? Task.Delay(Timeout.InfiniteTimeSpan)
@@ -95,7 +97,7 @@ static class Program {
             }
 
             await processExit;
-            int exitCode = child.Process.ExitCode;
+            int exitCode = child.process.ExitCode;
             store.WriteEvent(LifecycleEvent.Finish(exitCode == 0 ? "END" : "FAILED", record, exitCode));
             return exitCode;
         } catch (Exception exception) {
@@ -103,14 +105,14 @@ static class Program {
                 store.WriteEvent(LifecycleEvent.Finish("FAILED", record, 1, exception.Message));
             } else {
                 store.WriteEvent(new LifecycleEvent {
-                    Kind = "FAILED",
-                    Id = invocationId,
-                    Command = command,
-                    WorkingDirectory = workingDirectory,
-                    StartedAtUtc = startedAt,
-                    FinishedAtUtc = DateTimeOffset.UtcNow,
-                    ExitCode = 1,
-                    Message = SanitizeText(exception.Message, 160)
+                    kind = "FAILED",
+                    id = invocationId,
+                    command = command,
+                    workingDirectory = workingDirectory,
+                    startedAtUtc = startedAt,
+                    finishedAtUtc = DateTimeOffset.UtcNow,
+                    exitCode = 1,
+                    message = SanitizeText(exception.Message, 160)
                 });
             }
 
@@ -118,7 +120,7 @@ static class Program {
             return 1;
         } finally {
             if (record is not null) {
-                store.RemoveActive(record.Id);
+                store.RemoveActive(record.id);
             }
 
             child?.Dispose();
@@ -150,13 +152,13 @@ static class Program {
                 mcp = await McpServerRuntime.StartAsync(cancellation.Token);
             }
 
-            var ready = new ReadyRecord { Supervisor = ProcessIdentity.Current(), StartedAtUtc = DateTimeOffset.UtcNow, McpEnabled = mcpEnabled, McpReady = mcp is not null };
+            var ready = new ReadyRecord { supervisor = ProcessIdentity.Current(), startedAtUtc = DateTimeOffset.UtcNow, mcpEnabled = mcpEnabled, mcpReady = mcp is not null };
             store.WriteReady(ready);
             Console.WriteLine(
                 $"READY os={RuntimeInformation.OSDescription.Replace(' ', '_')} compose-unity={await ComposerVersionAsync()} mcp={(mcpEnabled ? "http://0.0.0.0:8080/mcp" : "disabled")}");
 
             while (!cancellation.IsCancellationRequested) {
-                if (mcp is not null && mcp.Completion.IsCompleted) {
+                if (mcp is not null && mcp.completion.IsCompleted) {
                     Console.Error.WriteLine("compose-unity-sidecar: MCP server stopped unexpectedly");
                     exitCode = 1;
                     cancellation.Cancel();
@@ -181,12 +183,12 @@ static class Program {
             }
 
             foreach (var record in store.ReadActive()) {
-                if (record.RootProcess.IsAlive()) {
+                if (record.rootProcess.IsAlive()) {
                     WriteLifecycleEvent(LifecycleEvent.Finish("CANCELLED", record, 130, "sidecar stopping"));
                     await ProcessTree.TerminateRecordAsync(record, TerminationGracePeriod);
                 }
 
-                store.RemoveActive(record.Id);
+                store.RemoveActive(record.id);
             }
 
             store.RemoveReady();
@@ -203,21 +205,21 @@ static class Program {
         var store = new StateStore();
         var ready = store.ReadReady();
         bool healthy = ready is not null
-                       && ready.Supervisor.IsAlive()
+                       && ready.supervisor.IsAlive()
                        && store.CanWrite()
-                       && (!ready.McpEnabled || ready.McpReady);
+                       && (!ready.mcpEnabled || ready.mcpReady);
         var active = store.ReadActive()
-            .Where(record => record.Launcher.IsAlive() || record.RootProcess.IsAlive())
-            .OrderBy(record => record.StartedAtUtc)
+            .Where(record => record.launcher.IsAlive() || record.rootProcess.IsAlive())
+            .OrderBy(record => record.startedAtUtc)
             .ToList();
 
         Console.WriteLine(healthy ? "healthy" : "unhealthy");
-        Console.WriteLine($"mcp: {(ready?.McpEnabled == true ? ready.McpReady ? "ready" : "unready" : "disabled")}");
+        Console.WriteLine($"mcp: {(ready?.mcpEnabled == true ? ready.mcpReady ? "ready" : "unready" : "disabled")}");
         Console.WriteLine($"active calls: {active.Count}");
         foreach (var record in active) {
-            var elapsed = DateTimeOffset.UtcNow - record.StartedAtUtc;
-            string timeout = record.TimeoutSeconds == 0 ? "disabled" : FormatDuration(TimeSpan.FromSeconds(record.TimeoutSeconds));
-            Console.WriteLine($"{record.Id} {record.Command} pid={record.RootProcess.Pid} elapsed={FormatDuration(elapsed)} timeout={timeout} cwd={record.WorkingDirectory}");
+            var elapsed = DateTimeOffset.UtcNow - record.startedAtUtc;
+            string timeout = record.timeoutSeconds == 0 ? "disabled" : FormatDuration(TimeSpan.FromSeconds(record.timeoutSeconds));
+            Console.WriteLine($"{record.id} {record.command} pid={record.rootProcess.pid} elapsed={FormatDuration(elapsed)} timeout={timeout} cwd={record.workingDirectory}");
         }
 
         return healthy ? 0 : 1;
@@ -228,45 +230,45 @@ static class Program {
             var store = new StateStore();
             var ready = store.ReadReady();
             return ready is not null
-                   && ready.Supervisor.IsAlive()
+                   && ready.supervisor.IsAlive()
                    && store.CanWrite()
                    && await ProbeComposerAsync()
-                   && (!ready.McpEnabled || (ready.McpReady && await McpServerRuntime.CheckHealthAsync()));
+                   && (!ready.mcpEnabled || (ready.mcpReady && await McpServerRuntime.CheckHealthAsync()));
         } catch {
             return false;
         }
     }
 
     static async Task ReconcileOrphanAsync(StateStore store, InvocationRecord record) {
-        if (record.Launcher.IsAlive()) {
+        if (record.launcher.IsAlive()) {
             return;
         }
 
         WriteLifecycleEvent(LifecycleEvent.Finish("ORPHANED", record, null, "launcher disappeared"));
-        if (record.RootProcess.IsAlive()) {
+        if (record.rootProcess.IsAlive()) {
             await ProcessTree.TerminateRecordAsync(record, TerminationGracePeriod);
         }
 
-        store.RemoveActive(record.Id);
+        store.RemoveActive(record.id);
     }
 
     static void WriteLifecycleEvent(LifecycleEvent lifecycleEvent) {
-        string duration = lifecycleEvent.FinishedAtUtc.HasValue
-            ? $" duration={FormatDuration(lifecycleEvent.FinishedAtUtc.Value - lifecycleEvent.StartedAtUtc)}"
+        string duration = lifecycleEvent.finishedAtUtc.HasValue
+            ? $" duration={FormatDuration(lifecycleEvent.finishedAtUtc.Value - lifecycleEvent.startedAtUtc)}"
             : string.Empty;
-        string exit = lifecycleEvent.ExitCode.HasValue ? $" exit={lifecycleEvent.ExitCode.Value}" : string.Empty;
-        string timeout = lifecycleEvent.TimeoutSeconds.HasValue
-            ? $" timeout={(lifecycleEvent.TimeoutSeconds.Value == 0 ? "disabled" : lifecycleEvent.TimeoutSeconds.Value + "s")}"
+        string exit = lifecycleEvent.exitCode.HasValue ? $" exit={lifecycleEvent.exitCode.Value}" : string.Empty;
+        string timeout = lifecycleEvent.timeoutSeconds.HasValue
+            ? $" timeout={(lifecycleEvent.timeoutSeconds.Value == 0 ? "disabled" : lifecycleEvent.timeoutSeconds.Value + "s")}"
             : string.Empty;
-        string message = string.IsNullOrEmpty(lifecycleEvent.Message) ? string.Empty : $" message={SanitizeText(lifecycleEvent.Message, 160)}";
+        string message = string.IsNullOrEmpty(lifecycleEvent.message) ? string.Empty : $" message={SanitizeText(lifecycleEvent.message, 160)}";
         Console.WriteLine(
-            $"{lifecycleEvent.Kind} id={lifecycleEvent.Id} pid={lifecycleEvent.Pid} command={lifecycleEvent.Command} cwd={lifecycleEvent.WorkingDirectory}{timeout}{exit}{duration}{message}");
+            $"{lifecycleEvent.kind} id={lifecycleEvent.id} pid={lifecycleEvent.pid} command={lifecycleEvent.command} cwd={lifecycleEvent.workingDirectory}{timeout}{exit}{duration}{message}");
     }
 
     static long ParseTimeout() {
         string? value = Environment.GetEnvironmentVariable("COMPOSE_UNITY_CALL_TIMEOUT");
         if (string.IsNullOrWhiteSpace(value)) {
-            return DefaultTimeoutSeconds;
+            return DEFAULT_TIMEOUT_SECONDS;
         }
 
         if (!long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out long seconds)
@@ -429,7 +431,7 @@ sealed class StateStore {
         }
     }
 
-    internal void WriteActive(InvocationRecord record) => WriteAtomic(Path.Combine(activeDirectory, record.Id + ".json"), record);
+    internal void WriteActive(InvocationRecord record) => WriteAtomic(Path.Combine(activeDirectory, record.id + ".json"), record);
     internal void RemoveActive(string id) => DeleteIfExists(Path.Combine(activeDirectory, id + ".json"));
     internal void WriteReady(ReadyRecord record) => WriteAtomic(readyPath, record);
     internal void RemoveReady() => DeleteIfExists(readyPath);
@@ -493,41 +495,41 @@ sealed class StateStore {
 }
 
 sealed class InvocationRecord {
-    public string Id { get; set; } = string.Empty;
-    public string Command { get; set; } = string.Empty;
-    public string WorkingDirectory { get; set; } = string.Empty;
-    public DateTimeOffset StartedAtUtc { get; set; }
-    public long TimeoutSeconds { get; set; }
-    public DateTimeOffset? DeadlineUtc { get; set; }
-    public ProcessIdentity Launcher { get; set; } = new();
-    public ProcessIdentity RootProcess { get; set; } = new();
-    public int ProcessGroupId { get; set; }
-    public string? JobName { get; set; }
+    public string id { get; set; } = string.Empty;
+    public string command { get; set; } = string.Empty;
+    public string workingDirectory { get; set; } = string.Empty;
+    public DateTimeOffset startedAtUtc { get; set; }
+    public long timeoutSeconds { get; set; }
+    public DateTimeOffset? deadlineUtc { get; set; }
+    public ProcessIdentity launcher { get; set; } = new();
+    public ProcessIdentity rootProcess { get; set; } = new();
+    public int processGroupId { get; set; }
+    public string? jobName { get; set; }
 }
 
 sealed class ReadyRecord {
-    public ProcessIdentity Supervisor { get; set; } = new();
-    public DateTimeOffset StartedAtUtc { get; set; }
-    public bool McpEnabled { get; set; }
-    public bool McpReady { get; set; }
+    public ProcessIdentity supervisor { get; set; } = new();
+    public DateTimeOffset startedAtUtc { get; set; }
+    public bool mcpEnabled { get; set; }
+    public bool mcpReady { get; set; }
 }
 
 sealed class ProcessIdentity {
-    public int Pid { get; set; }
-    public long StartMarker { get; set; }
+    public int pid { get; set; }
+    public long startMarker { get; set; }
 
     internal static ProcessIdentity Current() => FromProcess(Process.GetCurrentProcess());
 
-    internal static ProcessIdentity FromProcess(Process process) => new() { Pid = process.Id, StartMarker = ReadStartMarker(process) };
+    internal static ProcessIdentity FromProcess(Process process) => new() { pid = process.Id, startMarker = ReadStartMarker(process) };
 
     internal bool IsAlive() {
-        if (Pid <= 0 || StartMarker <= 0) {
+        if (pid <= 0 || startMarker <= 0) {
             return false;
         }
 
         try {
-            using var process = Process.GetProcessById(Pid);
-            return !process.HasExited && ReadStartMarker(process) == StartMarker;
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited && ReadStartMarker(process) == startMarker;
         } catch {
             return false;
         }
@@ -550,38 +552,38 @@ sealed class ProcessIdentity {
 }
 
 sealed class LifecycleEvent {
-    public string Kind { get; set; } = string.Empty;
-    public string Id { get; set; } = string.Empty;
-    public int Pid { get; set; }
-    public string Command { get; set; } = string.Empty;
-    public string WorkingDirectory { get; set; } = string.Empty;
-    public DateTimeOffset StartedAtUtc { get; set; }
-    public DateTimeOffset? FinishedAtUtc { get; set; }
-    public long? TimeoutSeconds { get; set; }
-    public int? ExitCode { get; set; }
-    public string? Message { get; set; }
+    public string kind { get; set; } = string.Empty;
+    public string id { get; set; } = string.Empty;
+    public int pid { get; set; }
+    public string command { get; set; } = string.Empty;
+    public string workingDirectory { get; set; } = string.Empty;
+    public DateTimeOffset startedAtUtc { get; set; }
+    public DateTimeOffset? finishedAtUtc { get; set; }
+    public long? timeoutSeconds { get; set; }
+    public int? exitCode { get; set; }
+    public string? message { get; set; }
 
     internal static LifecycleEvent Start(InvocationRecord record) => new() {
-        Kind = "START",
-        Id = record.Id,
-        Pid = record.RootProcess.Pid,
-        Command = record.Command,
-        WorkingDirectory = record.WorkingDirectory,
-        StartedAtUtc = record.StartedAtUtc,
-        TimeoutSeconds = record.TimeoutSeconds
+        kind = "START",
+        id = record.id,
+        pid = record.rootProcess.pid,
+        command = record.command,
+        workingDirectory = record.workingDirectory,
+        startedAtUtc = record.startedAtUtc,
+        timeoutSeconds = record.timeoutSeconds
     };
 
     internal static LifecycleEvent Finish(string kind, InvocationRecord record, int? exitCode, string? message = null) => new() {
-        Kind = kind,
-        Id = record.Id,
-        Pid = record.RootProcess.Pid,
-        Command = record.Command,
-        WorkingDirectory = record.WorkingDirectory,
-        StartedAtUtc = record.StartedAtUtc,
-        FinishedAtUtc = DateTimeOffset.UtcNow,
-        TimeoutSeconds = kind == "TIMEOUT" ? record.TimeoutSeconds : null,
-        ExitCode = exitCode,
-        Message = message
+        kind = kind,
+        id = record.id,
+        pid = record.rootProcess.pid,
+        command = record.command,
+        workingDirectory = record.workingDirectory,
+        startedAtUtc = record.startedAtUtc,
+        finishedAtUtc = DateTimeOffset.UtcNow,
+        timeoutSeconds = kind == "TIMEOUT" ? record.timeoutSeconds : null,
+        exitCode = exitCode,
+        message = message
     };
 }
 
@@ -591,19 +593,19 @@ sealed class ChildProcess : IDisposable {
     bool resumed;
 
     internal ChildProcess(Process process, int processGroupId, string? jobName, Action resume, IDisposable? nativeResource) {
-        Process = process;
-        ProcessGroupId = processGroupId;
-        JobName = jobName;
+        this.process = process;
+        this.processGroupId = processGroupId;
+        this.jobName = jobName;
         this.resume = resume;
         this.nativeResource = nativeResource;
     }
 
-    internal Process Process { get; }
-    internal int ProcessGroupId { get; }
-    internal string? JobName { get; }
+    internal Process process { get; }
+    internal int processGroupId { get; }
+    internal string? jobName { get; }
 
     public void Dispose() {
-        Process.Dispose();
+        process.Dispose();
         nativeResource?.Dispose();
     }
 
@@ -625,20 +627,20 @@ static class ProcessTree {
     }
 
     internal static Task TerminateChildAsync(ChildProcess child, TimeSpan gracePeriod) => OperatingSystem.IsWindows()
-        ? WindowsProcessTree.TerminateAsync(child.Process, child.JobName, gracePeriod)
-        : UnixProcessTree.TerminateAsync(child.Process, child.ProcessGroupId, gracePeriod);
+        ? WindowsProcessTree.TerminateAsync(child.process, child.jobName, gracePeriod)
+        : UnixProcessTree.TerminateAsync(child.process, child.processGroupId, gracePeriod);
 
     internal static async Task TerminateRecordAsync(InvocationRecord record, TimeSpan gracePeriod) {
-        if (!record.RootProcess.IsAlive()) {
+        if (!record.rootProcess.IsAlive()) {
             return;
         }
 
         try {
-            using var process = Process.GetProcessById(record.RootProcess.Pid);
+            using var process = Process.GetProcessById(record.rootProcess.pid);
             if (OperatingSystem.IsWindows()) {
-                await WindowsProcessTree.TerminateAsync(process, record.JobName, gracePeriod);
+                await WindowsProcessTree.TerminateAsync(process, record.jobName, gracePeriod);
             } else {
-                await UnixProcessTree.TerminateAsync(process, record.ProcessGroupId, gracePeriod);
+                await UnixProcessTree.TerminateAsync(process, record.processGroupId, gracePeriod);
             }
         } catch (ArgumentException) {
         } catch (InvalidOperationException) {
@@ -647,8 +649,8 @@ static class ProcessTree {
 }
 
 static class UnixProcessTree {
-    const int SigTerm = 15;
-    const int SigKill = 9;
+    const int SIG_TERM = 15;
+    const int SIG_KILL = 9;
 
     [DllImport("libc", SetLastError = true)]
     static extern int kill(int pid, int signal);
@@ -670,13 +672,13 @@ static class UnixProcessTree {
             return;
         }
 
-        kill(-processGroupId, SigTerm);
+        kill(-processGroupId, SIG_TERM);
         if (process is not null && await WaitForExitAsync(process, gracePeriod)) {
             return;
         }
 
         await Task.Delay(gracePeriod);
-        kill(-processGroupId, SigKill);
+        kill(-processGroupId, SIG_KILL);
         if (process is not null) {
             await WaitForExitAsync(process, TimeSpan.FromSeconds(2));
         }
@@ -693,17 +695,17 @@ static class UnixProcessTree {
 }
 
 static class WindowsProcessTree {
-    const uint CreateSuspended = 0x00000004;
-    const uint CreateNewProcessGroup = 0x00000200;
-    const uint StartfUseStdHandles = 0x00000100;
-    const uint JobObjectExtendedLimitInformationClass = 9;
-    const uint JobObjectLimitKillOnJobClose = 0x00002000;
-    const uint JobObjectTerminate = 0x0008;
-    const uint JobObjectQuery = 0x0004;
-    const uint CtrlBreakEvent = 1;
-    const int StdInputHandle = -10;
-    const int StdOutputHandle = -11;
-    const int StdErrorHandle = -12;
+    const uint CREATE_SUSPENDED = 0x00000004;
+    const uint CREATE_NEW_PROCESS_GROUP = 0x00000200;
+    const uint STARTF_USE_STD_HANDLES = 0x00000100;
+    const uint JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS = 9;
+    const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
+    const uint JOB_OBJECT_TERMINATE = 0x0008;
+    const uint JOB_OBJECT_QUERY = 0x0004;
+    const uint CTRL_BREAK_EVENT = 1;
+    const int STD_INPUT_HANDLE = -10;
+    const int STD_OUTPUT_HANDLE = -11;
+    const int STD_ERROR_HANDLE = -12;
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern IntPtr CreateJobObject(IntPtr attributes, string name);
@@ -756,14 +758,14 @@ static class WindowsProcessTree {
             ConfigureKillOnClose(job);
             var startupInfo = new StartupInfo {
                 Size = Marshal.SizeOf<StartupInfo>(),
-                Flags = StartfUseStdHandles,
-                StandardInput = GetStdHandle(StdInputHandle),
-                StandardOutput = GetStdHandle(StdOutputHandle),
-                StandardError = GetStdHandle(StdErrorHandle)
+                Flags = STARTF_USE_STD_HANDLES,
+                StandardInput = GetStdHandle(STD_INPUT_HANDLE),
+                StandardOutput = GetStdHandle(STD_OUTPUT_HANDLE),
+                StandardError = GetStdHandle(STD_ERROR_HANDLE)
             };
             var commandLine = new StringBuilder(BuildCommandLine(startInfo));
             if (!CreateProcess(null, commandLine, IntPtr.Zero, IntPtr.Zero, true,
-                    CreateSuspended | CreateNewProcessGroup, IntPtr.Zero, startInfo.WorkingDirectory,
+                    CREATE_SUSPENDED | CREATE_NEW_PROCESS_GROUP, IntPtr.Zero, startInfo.WorkingDirectory,
                     ref startupInfo, out var processInformation)) {
                 throw NativeError("Failed to create suspended Composer process");
             }
@@ -797,14 +799,14 @@ static class WindowsProcessTree {
             return;
         }
 
-        IntPtr job = OpenJobObject(JobObjectTerminate | JobObjectQuery, false, jobName);
+        IntPtr job = OpenJobObject(JOB_OBJECT_TERMINATE | JOB_OBJECT_QUERY, false, jobName);
         if (job == IntPtr.Zero) {
             return;
         }
 
         try {
             if (process is not null && !process.HasExited) {
-                GenerateConsoleCtrlEvent(CtrlBreakEvent, (uint)process.Id);
+                GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, (uint)process.Id);
                 if (await WaitForExitAsync(process, gracePeriod)) {
                     return;
                 }
@@ -820,12 +822,12 @@ static class WindowsProcessTree {
     }
 
     static void ConfigureKillOnClose(IntPtr job) {
-        var information = new JobObjectExtendedLimitInformation { BasicLimitInformation = new JobObjectBasicLimitInformation { LimitFlags = JobObjectLimitKillOnJobClose } };
+        var information = new JobObjectExtendedLimitInformation { BasicLimitInformation = new JobObjectBasicLimitInformation { LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE } };
         int size = Marshal.SizeOf<JobObjectExtendedLimitInformation>();
         IntPtr pointer = Marshal.AllocHGlobal(size);
         try {
             Marshal.StructureToPtr(information, pointer, false);
-            if (!SetInformationJobObject(job, JobObjectExtendedLimitInformationClass, pointer, (uint)size)) {
+            if (!SetInformationJobObject(job, JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS, pointer, (uint)size)) {
                 throw NativeError("Failed to configure Windows Job Object");
             }
         } finally {
