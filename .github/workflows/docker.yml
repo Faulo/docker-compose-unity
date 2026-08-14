@@ -51,22 +51,28 @@ jobs:
             - name: Configure Hyper-V as Docker default isolation
               shell: pwsh
               run: |
-                  $configPath = Join-Path $env:ProgramData "docker\config\daemon.json"
-                  $configDirectory = Split-Path -Parent $configPath
-                  New-Item -ItemType Directory -Path $configDirectory -Force | Out-Null
-                  $config = if (Test-Path -LiteralPath $configPath) {
-                      Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json -AsHashtable
-                  } else {
-                      @{}
+                  Stop-Service docker
+                  $standardOutput = Join-Path $env:RUNNER_TEMP "dockerd.stdout.log"
+                  $standardError = Join-Path $env:RUNNER_TEMP "dockerd.stderr.log"
+                  $daemon = Start-Process -FilePath (Get-Command dockerd).Source `
+                      -ArgumentList "--host=npipe:////./pipe/docker_engine", "--exec-opt=isolation=hyperv" `
+                      -RedirectStandardOutput $standardOutput -RedirectStandardError $standardError `
+                      -WindowStyle Hidden -PassThru
+                  for ($attempt = 1; $attempt -le 60; $attempt++) {
+                      $isolation = docker info --format "{{.Isolation}}" 2>$null
+                      if ($LASTEXITCODE -eq 0 -and $isolation.Trim() -eq "hyperv") {
+                          exit 0
+                      }
+                      if ($daemon.HasExited) {
+                          Write-Output "dockerd stdout:"
+                          Get-Content -LiteralPath $standardOutput
+                          Write-Output "dockerd stderr:"
+                          Get-Content -LiteralPath $standardError
+                          throw "dockerd exited with code $($daemon.ExitCode)."
+                      }
+                      Start-Sleep -Seconds 1
                   }
-                  $execOptions = @($config["exec-opts"] | Where-Object { $_ -notmatch "^isolation=" })
-                  $config["exec-opts"] = @($execOptions + "isolation=hyperv")
-                  $config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $configPath -Encoding utf8
-                  Restart-Service docker
-                  $isolation = docker info --format "{{.Isolation}}"
-                  if ($LASTEXITCODE -ne 0 -or $isolation.Trim() -ne "hyperv") {
-                      throw "Docker did not start with Hyper-V as its default isolation: $isolation"
-                  }
+                  throw "Docker did not start with Hyper-V as its default isolation within 60 seconds."
             - name: Register Windows Docker context
               shell: pwsh
               run: docker context create windows --docker "host=npipe:////./pipe/docker_engine"
