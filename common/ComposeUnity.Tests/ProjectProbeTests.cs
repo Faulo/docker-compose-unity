@@ -7,52 +7,52 @@ public sealed class ProjectProbeTests {
         get => Path.Combine(AppContext.BaseDirectory, "test-files", "ValidProject");
     }
 
-    [Fact]
+    [Test]
     public void ReadsCompleteUnityProject() {
         var result = ProjectProbe.Read(ValidProject);
 
-        Assert.Equal("Example Company", result.companyName);
-        Assert.Equal("Example Game", result.projectName);
-        Assert.Equal("1.2.3", result.projectVersion);
-        Assert.Equal("6000.3.13f1", result.editorVersion);
-        Assert.Equal("8c4f11e4fb20", result.editorRevision);
-        Assert.Equal(".NET Standard 2.1", result.apiCompatibility);
-        Assert.False(result.allowUnsafeCode);
-        Assert.Equal("IL2CPP", result.scriptingBackendOverrides["WindowsStandaloneSupport"]);
-        Assert.Equal("Unknown (99)", result.scriptingBackendOverrides["UnknownTarget"]);
-        Assert.Equal("Universal", result.renderPipeline);
-        Assert.Equal("Linear", result.colorSpace);
-        Assert.Equal("InputSystem", result.inputHandling);
-        Assert.False(result.graphicsApis["WindowsStandaloneSupport"].automatic);
-        Assert.Equal(["Direct3D11", "Direct3D12"], result.graphicsApis["WindowsStandaloneSupport"].apis);
-        Assert.Equal("1.2.3", result.packages["custom"]?.GetValue<string>());
+        Assert.That(result.companyName, Is.EqualTo("Example Company"));
+        Assert.That(result.projectName, Is.EqualTo("Example Game"));
+        Assert.That(result.projectVersion, Is.EqualTo("1.2.3"));
+        Assert.That(result.editorVersion, Is.EqualTo("6000.3.13f1"));
+        Assert.That(result.editorRevision, Is.EqualTo("8c4f11e4fb20"));
+        Assert.That(result.apiCompatibility, Is.EqualTo(".NET Standard 2.1"));
+        Assert.That(result.allowUnsafeCode, Is.False);
+        Assert.That(result.scriptingBackendOverrides["WindowsStandaloneSupport"], Is.EqualTo("IL2CPP"));
+        Assert.That(result.scriptingBackendOverrides["UnknownTarget"], Is.EqualTo("Unknown (99)"));
+        Assert.That(result.renderPipeline, Is.EqualTo("Universal"));
+        Assert.That(result.colorSpace, Is.EqualTo("Linear"));
+        Assert.That(result.inputHandling, Is.EqualTo("InputSystem"));
+        Assert.That(result.graphicsApis["WindowsStandaloneSupport"].automatic, Is.False);
+        Assert.That(result.graphicsApis["WindowsStandaloneSupport"].apis, Is.EqualTo(new[] { "Direct3D11", "Direct3D12" }));
+        Assert.That(result.packages["custom"]?.GetValue<string>(), Is.EqualTo("1.2.3"));
     }
 
-    [Fact]
+    [Test]
     public void ReportsUnknownWhenGraphicsSettingsIsOptionalAndMissing() {
         using var project = TemporaryProject.CopyOf(ValidProject);
         File.Delete(Path.Combine(project.path, "ProjectSettings", "GraphicsSettings.asset"));
 
-        Assert.Equal("Unknown", ProjectProbe.Read(project.path).renderPipeline);
+        Assert.That(ProjectProbe.Read(project.path).renderPipeline, Is.EqualTo("Unknown"));
     }
 
-    [Fact]
+    [Test]
     public void RejectsMissingUnityProjectDirectory() {
         string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
         try {
-            var exception = Assert.Throws<InvalidOperationException>(() => ProjectProbe.Read(path));
-            Assert.Contains("Assets", exception.Message, StringComparison.Ordinal);
+            var exception = Assert.Throws<InvalidOperationException>(() => ProjectProbe.Read(path))!;
+            Assert.That(exception.Message, Does.Contain("Assets"));
         } finally {
             Directory.Delete(path, true);
         }
     }
 
-    [Fact]
+    [Test]
     public void PreservesCompleteManifest() {
         var expected = JsonNode.Parse(File.ReadAllText(Path.Combine(ValidProject, "Packages", "manifest.json")))!.AsObject();
 
-        Assert.True(JsonNode.DeepEquals(expected, ProjectProbe.Read(ValidProject).packages));
+        Assert.That(JsonNode.DeepEquals(expected, ProjectProbe.Read(ValidProject).packages), Is.True);
     }
 
     sealed class TemporaryProject : IDisposable {

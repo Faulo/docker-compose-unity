@@ -1,7 +1,7 @@
 namespace ComposeUnity.Tests;
 
 public sealed class StateAndConcurrencyTests {
-    [Fact]
+    [Test]
     public void PersistsAndDrainsSidecarState() {
         using var directory = new TemporaryDirectory();
         var store = new StateStore(directory.path);
@@ -15,26 +15,29 @@ public sealed class StateAndConcurrencyTests {
         var ready = new ReadyRecord { supervisor = ProcessIdentity.Current(), mcpEnabled = true, mcpReady = true };
 
         store.EnsureDirectories();
-        Assert.True(store.CanWrite());
+        Assert.That(store.CanWrite(), Is.True);
         store.WriteActive(invocation);
         store.WriteReady(ready);
         store.WriteEvent(LifecycleEvent.Start(invocation));
 
-        Assert.Equal("abc", Assert.Single(store.ReadActive()).id);
-        Assert.True(store.ReadReady()?.mcpReady);
+        var active = store.ReadActive();
+        Assert.That(active, Has.Count.EqualTo(1));
+        Assert.That(active.Single().id, Is.EqualTo("abc"));
+        Assert.That(store.ReadReady()?.mcpReady, Is.True);
         var events = new List<LifecycleEvent>();
         store.DrainEvents(events.Add);
-        Assert.Equal("START", Assert.Single(events).kind);
+        Assert.That(events, Has.Count.EqualTo(1));
+        Assert.That(events.Single().kind, Is.EqualTo("START"));
         store.DrainEvents(events.Add);
-        Assert.Single(events);
+        Assert.That(events, Has.Count.EqualTo(1));
 
         store.RemoveActive("abc");
         store.RemoveReady();
-        Assert.Empty(store.ReadActive());
-        Assert.Null(store.ReadReady());
+        Assert.That(store.ReadActive(), Is.Empty);
+        Assert.That(store.ReadReady(), Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task GrantsFifoLockInRequestOrder() {
         var fifo = new AsyncFifoLock();
         var order = new List<int>();
@@ -45,7 +48,7 @@ public sealed class StateAndConcurrencyTests {
         await first.DisposeAsync();
         await Task.WhenAll(second, third);
 
-        Assert.Equal([2, 3], order);
+        Assert.That(order, Is.EqualTo(new[] { 2, 3 }));
 
         async Task enterAsync(int value) {
             await using var lease = await fifo.AcquireAsync(CancellationToken.None);
@@ -53,7 +56,7 @@ public sealed class StateAndConcurrencyTests {
         }
     }
 
-    [Fact]
+    [Test]
     public async Task SkipsCancelledFifoWaiter() {
         var fifo = new AsyncFifoLock();
         await using var first = await fifo.AcquireAsync(CancellationToken.None);
@@ -64,22 +67,21 @@ public sealed class StateAndConcurrencyTests {
 
         await first.DisposeAsync();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await cancelled);
+        Assert.CatchAsync<OperationCanceledException>(async () => await cancelled);
         await using var nextLease = await next;
     }
 
-    [Theory]
-    [InlineData("/project/", "/project")]
-    [InlineData("/", "/")]
-    [InlineData("C:\\project\\", "C:\\project")]
+    [TestCase("/project/", "/project")]
+    [TestCase("/", "/")]
+    [TestCase("C:\\project\\", "C:\\project")]
     public void NormalizesDaemonPaths(string value, string expected) =>
-        Assert.Equal(expected, UnityMcpController.NormalizeDaemonPath(value));
+        Assert.That(UnityMcpController.NormalizeDaemonPath(value), Is.EqualTo(expected));
 
-    [Fact]
+    [Test]
     public void NormalizesWindowsProjectIdentityAcrossControllerPlatforms() {
-        Assert.Equal("C:\\PROJECT", UnityMcpController.ProjectIdentityPath("c:\\project", false));
-        Assert.Equal("/PROJECT", UnityMcpController.ProjectIdentityPath("/project", true));
-        Assert.Equal("/project", UnityMcpController.ProjectIdentityPath("/project", false));
+        Assert.That(UnityMcpController.ProjectIdentityPath("c:\\project", false), Is.EqualTo("C:\\PROJECT"));
+        Assert.That(UnityMcpController.ProjectIdentityPath("/project", true), Is.EqualTo("/PROJECT"));
+        Assert.That(UnityMcpController.ProjectIdentityPath("/project", false), Is.EqualTo("/project"));
     }
 
     sealed class TemporaryDirectory : IDisposable {

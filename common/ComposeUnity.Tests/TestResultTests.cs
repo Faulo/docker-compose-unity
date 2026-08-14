@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 namespace ComposeUnity.Tests;
 
 public sealed class TestResultTests {
-    [Fact]
+    [Test]
     public void BuildsPassedResultFromJUnit() {
         const string xml = """
                            <testsuites>
@@ -17,15 +17,15 @@ public sealed class TestResultTests {
 
         var result = Build(xml, 0);
 
-        Assert.Equal("passed", result["outcome"]?.GetValue<string>());
-        Assert.Equal(2, result["counts"]?["total"]?.GetValue<int>());
-        Assert.Equal(1, result["counts"]?["passed"]?.GetValue<int>());
-        Assert.Equal(1, result["counts"]?["skipped"]?.GetValue<int>());
-        Assert.Equal(1.234m, result["durationSeconds"]?.GetValue<decimal>());
-        Assert.Empty(result["failures"]!.AsArray());
+        Assert.That(result["outcome"]?.GetValue<string>(), Is.EqualTo("passed"));
+        Assert.That(result["counts"]?["total"]?.GetValue<int>(), Is.EqualTo(2));
+        Assert.That(result["counts"]?["passed"]?.GetValue<int>(), Is.EqualTo(1));
+        Assert.That(result["counts"]?["skipped"]?.GetValue<int>(), Is.EqualTo(1));
+        Assert.That(result["durationSeconds"]?.GetValue<decimal>(), Is.EqualTo(1.234m));
+        Assert.That(result["failures"]!.AsArray(), Is.Empty);
     }
 
-    [Fact]
+    [Test]
     public void BuildsFailedResultWithCompleteDetails() {
         const string xml = """
                            <testsuites>
@@ -39,14 +39,14 @@ public sealed class TestResultTests {
         var result = Build(xml, 2);
         var failure = result["failures"]![0]!.AsObject();
 
-        Assert.Equal("failed", result["outcome"]?.GetValue<string>());
-        Assert.Equal(2, result["exitCode"]?.GetValue<int>());
-        Assert.Equal("Fails", failure["name"]?.GetValue<string>());
-        Assert.Contains("line two", failure["stackTrace"]?.GetValue<string>(), StringComparison.Ordinal);
-        Assert.False(result["failuresTruncated"]?.GetValue<bool>());
+        Assert.That(result["outcome"]?.GetValue<string>(), Is.EqualTo("failed"));
+        Assert.That(result["exitCode"]?.GetValue<int>(), Is.EqualTo(2));
+        Assert.That(failure["name"]?.GetValue<string>(), Is.EqualTo("Fails"));
+        Assert.That(failure["stackTrace"]?.GetValue<string>(), Does.Contain("line two"));
+        Assert.That(result["failuresTruncated"]?.GetValue<bool>(), Is.False);
     }
 
-    [Fact]
+    [Test]
     public void TruncatesFailureRecordsAtOneHundred() {
         string cases = string.Concat(Enumerable.Range(0, 101)
             .Select(index => $"<testcase name=\"Failure{index}\"><failure message=\"bad\">stack {index}</failure></testcase>"));
@@ -54,21 +54,20 @@ public sealed class TestResultTests {
 
         var result = Build(xml, 2);
 
-        Assert.Equal(100, result["failures"]!.AsArray().Count);
-        Assert.True(result["failuresTruncated"]?.GetValue<bool>());
+        Assert.That(result["failures"]!.AsArray(), Has.Count.EqualTo(100));
+        Assert.That(result["failuresTruncated"]?.GetValue<bool>(), Is.True);
     }
 
-    [Theory]
-    [InlineData("not xml", 1)]
-    [InlineData("<testsuites />", 1)]
-    [InlineData("<testsuites><testsuite tests=\"0\" failures=\"0\" errors=\"0\" skipped=\"0\" /></testsuites>", 1)]
+    [TestCase("not xml", 1)]
+    [TestCase("<testsuites />", 1)]
+    [TestCase("<testsuites><testsuite tests=\"0\" failures=\"0\" errors=\"0\" skipped=\"0\" /></testsuites>", 1)]
     public void ReturnsCompleteOrderedLogForUntrustworthyResults(string standardOutput, int exitCode) {
         var result = new ExecResult("id", exitCode, standardOutput, "stderr", "[stdout]\nxml\n[stderr]\nstderr");
         var value = JsonNode.Parse(JsonSerializer.Serialize(UnityMcpController.BuildTestResult(result)))!.AsObject();
 
-        Assert.Equal("error", value["outcome"]?.GetValue<string>());
-        Assert.Equal("[stdout]\nxml\n[stderr]\nstderr", value["log"]?.GetValue<string>());
-        Assert.Equal(3, value.Count);
+        Assert.That(value["outcome"]?.GetValue<string>(), Is.EqualTo("error"));
+        Assert.That(value["log"]?.GetValue<string>(), Is.EqualTo("[stdout]\nxml\n[stderr]\nstderr"));
+        Assert.That(value, Has.Count.EqualTo(3));
     }
 
     static JsonObject Build(string standardOutput, int exitCode) {

@@ -4,14 +4,14 @@ using System.Text;
 namespace ComposeUnity.Tests;
 
 public sealed class DockerStreamTests {
-    [Fact]
+    [Test]
     public void NormalizesUppercaseWindowsHostnameForDockerInspection() {
         var candidates = DockerEngineClient.SelfInspectionCandidates(null, "84A2225C9DAC");
 
-        Assert.Equal(["84a2225c9dac", "84A2225C9DAC"], candidates);
+        Assert.That(candidates, Is.EqualTo(new[] { "84a2225c9dac", "84A2225C9DAC" }));
     }
 
-    [Fact]
+    [Test]
     public async Task SeparatesAndOrdersMultiplexedDockerFrames() {
         await using var stream = new MemoryStream();
         WriteFrame(stream, 1, "first");
@@ -22,29 +22,29 @@ public sealed class DockerStreamTests {
 
         var output = await DockerEngineClient.ReadMultiplexedAsync(stream, CancellationToken.None);
 
-        Assert.Equal("first secondlast", output.standardOutput);
-        Assert.Equal("problem", output.standardError);
-        Assert.Equal("[stdout]\nfirst second\n[stderr]\nproblem\n[stdout]\nlast", output.combinedOutput);
+        Assert.That(output.standardOutput, Is.EqualTo("first secondlast"));
+        Assert.That(output.standardError, Is.EqualTo("problem"));
+        Assert.That(output.combinedOutput, Is.EqualTo("[stdout]\nfirst second\n[stderr]\nproblem\n[stdout]\nlast"));
     }
 
-    [Fact]
+    [Test]
     public async Task AcceptsUnframedOutputAsStandardOutput() {
         await using var stream = new MemoryStream(Encoding.UTF8.GetBytes("plain output"));
 
         var output = await DockerEngineClient.ReadMultiplexedAsync(stream, CancellationToken.None);
 
-        Assert.Equal("plain output", output.standardOutput);
-        Assert.Empty(output.standardError);
-        Assert.Equal("[stdout]\nplain output", output.combinedOutput);
+        Assert.That(output.standardOutput, Is.EqualTo("plain output"));
+        Assert.That(output.standardError, Is.Empty);
+        Assert.That(output.combinedOutput, Is.EqualTo("[stdout]\nplain output"));
     }
 
-    [Fact]
+    [Test]
     public async Task RejectsTruncatedDockerFrame() {
         await using var stream = new MemoryStream();
         WriteFrame(stream, 1, "short", declaredLength: 10);
         stream.Position = 0;
 
-        await Assert.ThrowsAsync<EndOfStreamException>(async () =>
+        Assert.ThrowsAsync<EndOfStreamException>(async () =>
             await DockerEngineClient.ReadMultiplexedAsync(stream, CancellationToken.None));
     }
 
