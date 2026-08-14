@@ -429,13 +429,35 @@ does not provide authentication and is not intended for remote publication.
 Run the daemon-free test suite with the .NET 9 SDK:
 
 ```text
-dotnet test docker-compose-unity.sln --configuration Release
+dotnet test common/ComposeUnity.Tests/ComposeUnity.Tests.csproj --configuration Release
 ```
 
 The suite covers command routing and legacy compatibility, configuration and
 sanitization, project probing (including optional graphics settings), Unity
 JUnit result parsing, Docker stream framing, state persistence, path handling,
 and per-project FIFO behavior.
+
+Real-daemon tests live in a separate project because they build disposable
+`tmp/compose-unity-daemon-tests` images and create containers, bind mounts,
+execs, and MCP worker state on every available local daemon:
+
+```text
+dotnet test common/ComposeUnity.DaemonTests/ComposeUnity.DaemonTests.csproj --configuration Release
+```
+
+The fixtures use the explicitly named `linux` and `windows` Docker contexts,
+verify the daemon-reported container OS, and skip each platform independently
+when its context or daemon is unavailable. Only local named-pipe and Unix-socket
+contexts are accepted.
+
+The tests publish the current controller and a deterministic fake
+`compose-unity` executable, then assemble a minimal image from the applicable
+.NET runtime-deps base. The fake executable occupies the same path workers use
+in production, but does not install Composer, PHP, Unity, or the other production
+image tools. The suite verifies project probing, MCP calls, argument boundaries,
+Docker output and exit codes, JUnit results, retained worker reuse, project
+mounts, and exclusion of the Docker endpoint from workers. The Windows fixture
+uses the official .NET 9 Nano Server 1809 image for LTSC 2019 hosts.
 
 The MCP `project_info` path has a separate end-to-end test. It builds a small
 disposable image under the permitted `tmp/` namespace, starts a sidecar against

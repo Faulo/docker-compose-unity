@@ -32,7 +32,7 @@ jobs:
               with:
                   dotnet-version: 9.0.x
             - name: Run unit tests
-              run: dotnet test docker-compose-unity.sln --nologo --configuration Release
+              run: dotnet test common/ComposeUnity.Tests/ComposeUnity.Tests.csproj --nologo --configuration Release
             - name: Register Linux Docker context
               run: docker context create linux --docker host=unix:///var/run/docker.sock
             - name: Run project_info integration test

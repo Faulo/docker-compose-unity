@@ -14,8 +14,18 @@ public sealed class DockerEngineClientTests {
 
     [Test]
     public void RejectsEmptyEndpointNames() {
-        Assert.Throws<ArgumentException>(() => new DockerEngineClient(string.Empty, "/tmp/docker.sock"));
-        Assert.Throws<ArgumentException>(() => new DockerEngineClient("docker", string.Empty));
+        Assert.That(captureArgumentException(string.Empty, "/tmp/docker.sock"), Is.Not.Null);
+        Assert.That(captureArgumentException("docker", string.Empty), Is.Not.Null);
+
+        static ArgumentException? captureArgumentException(string windowsPipeName, string unixSocketPath) {
+            try {
+                var client = new DockerEngineClient(windowsPipeName, unixSocketPath);
+                client.DisposeAsync().GetAwaiter().GetResult();
+                return null;
+            } catch (ArgumentException exception) {
+                return exception;
+            }
+        }
     }
 
     [Test]
@@ -144,12 +154,17 @@ public sealed class DockerEngineClientTests {
             FakeDockerResponse.Json("""{"message":"specific engine failure"}""", HttpStatusCode.InternalServerError)));
         await using var client = engine.CreateClient();
 
-        var exception = Assert.ThrowsAsync<DockerApiException>(async () =>
-            await client.VersionAsync(CancellationToken.None));
+        DockerApiException? exception = null;
+        try {
+            await client.VersionAsync(CancellationToken.None);
+        } catch (DockerApiException caught) {
+            exception = caught;
+        }
 
         Assert.Multiple(() => {
-            Assert.That(exception!.statusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
-            Assert.That(exception.Message, Does.Contain("specific engine failure"));
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception?.statusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+            Assert.That(exception?.Message, Does.Contain("specific engine failure"));
         });
     }
 
@@ -162,8 +177,14 @@ public sealed class DockerEngineClientTests {
         await using var client = engine.CreateClient();
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
 
-        Assert.CatchAsync<OperationCanceledException>(async () =>
-            await client.VersionAsync(cancellation.Token));
+        OperationCanceledException? exception = null;
+        try {
+            await client.VersionAsync(cancellation.Token);
+        } catch (OperationCanceledException caught) {
+            exception = caught;
+        }
+
+        Assert.That(exception, Is.Not.Null);
     }
 
     [Test]
@@ -215,7 +236,7 @@ public sealed class DockerEngineClientTests {
                 return Task.FromResult(FakeDockerResponse.Json(new JsonObject { ["Id"] = name }.ToJsonString(), HttpStatusCode.Created));
             }
 
-            if (TryContainerName(request.path, "/json", out string? inspectedName)) {
+            if (TryContainerName(request.path, "/json", out string inspectedName)) {
                 if (selfCandidates.Contains(inspectedName)) {
                     var self = new JsonObject {
                         ["Id"] = selfId,
@@ -255,7 +276,7 @@ public sealed class DockerEngineClientTests {
                 return Task.FromResult(FakeDockerResponse.Json(container.ToJsonString()));
             }
 
-            if (TryContainerName(request.path, "/start", out string? startedName) && request.method == "POST") {
+            if (TryContainerName(request.path, "/start", out string startedName) && request.method == "POST") {
                 running[startedName] = true;
                 return Task.FromResult(FakeDockerResponse.Empty(HttpStatusCode.NoContent));
             }
@@ -264,7 +285,7 @@ public sealed class DockerEngineClientTests {
                 return Task.FromResult(FakeDockerResponse.Json("""{"StatusCode":0}"""));
             }
 
-            if (TryContainerName(request.path, "/logs?stdout=1&stderr=1", out string? loggedName)
+            if (TryContainerName(request.path, "/logs?stdout=1&stderr=1", out string loggedName)
                 && loggedName.StartsWith("compose-unity-probe-", StringComparison.Ordinal)) {
                 return Task.FromResult(FakeDockerResponse.Bytes(Frames((1, probeOutput))));
             }
