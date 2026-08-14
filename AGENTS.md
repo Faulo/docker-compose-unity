@@ -52,6 +52,7 @@ message:
   reproducibility, risks, and a proposed implementation plan. Do not edit
   files, change remote state, commit, or push until the user approves the
   approach.
+- `can you <x>?` is a question about your knowledge, capabilities or permissions. It is not an instruction to perform `x`.
 
 ### Compatibility
 
