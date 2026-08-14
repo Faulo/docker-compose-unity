@@ -137,6 +137,7 @@ state, caches, and licensing data on Linux:
 
 ```yaml
 volumes:
+  - steam:C:/steam
   - unity-binaries:/root/Unity
   - unity-config:/root/.config/unity3d
   - unity-hub:/root/.config/unityhub
@@ -148,23 +149,13 @@ The equivalent Windows volume mappings are:
 
 ```yaml
 volumes:
+  - steam:/root/Steam
   - unity-binaries:C:/Program Files/Unity/Hub/Editor
   - unity-config:C:/Users/ContainerAdministrator/AppData/Roaming/Unity
   - unity-hub:C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub
   - unity-cache:C:/Users/ContainerAdministrator/AppData/Local/Unity
   - unity-license:C:/ProgramData/Unity
 ```
-
-SteamCMD state can be persisted at:
-
-- Linux: `/root/Steam`
-- Windows: `C:/steam`
-
-On Windows, the `steamcmd` command seeds Valve's standalone installer into an
-empty `C:/steam` volume, then runs and updates SteamCMD there. On both
-platforms, reusing the Steam volume preserves updater downloads and login
-configuration across containers. The Dockerfiles declare all Unity state paths
-shown above and the SteamCMD state directory as volumes.
 
 `linux/machine-id` supplies a stable Linux machine identity used by the image. Changes to that file, credential forwarding, editor paths, or licensing volumes can invalidate persisted licensing and should be made deliberately.
 
@@ -189,68 +180,13 @@ launcher as well.
 ## Long-Running Sidecar
 
 With no explicit command, the image starts `compose-unity sidecar` as PID 1.
-Start a Linux sidecar with persistent editor and Unity state volumes:
-
-```text
-docker run -d --name unity \
-  -v unity-binaries:/root/Unity \
-  -v unity-config:/root/.config/unity3d \
-  faulo/compose-unity:latest
-```
-
-Start a Windows sidecar with equivalent persistent volumes:
-
-```text
-docker run -d --name unity `
-  -v "unity-binaries:C:/Program Files/Unity/Hub/Editor" `
-  -v "unity-config:C:/Users/ContainerAdministrator/AppData/Roaming/Unity" `
-  faulo/compose-unity:latest
-```
-
-Mount the project workspace when starting the container, then select it for each call:
-
-```text
-docker exec --workdir <workspace> unity compose-unity exec unity-build ...
-```
-
-Forward invocation-specific environment variables with `docker exec --env NAME` or set container-wide values with `docker run --env NAME`. Environment values and full argument lists are never written to sidecar state or logs.
-
-Each invocation has a maximum duration controlled by `COMPOSE_UNITY_CALL_TIMEOUT`. The default is `86400` seconds (24 hours). A container-wide value may be overridden per call:
-
-```text
-docker exec --env COMPOSE_UNITY_CALL_TIMEOUT=7200 unity compose-unity exec unity-build ...
-```
-
-Set the value to `0` to disable the call limit. Invalid and negative values fail before Composer starts. A timed-out call terminates its Composer/Unity process tree and returns exit code `124`; the sidecar remains available and healthy.
-
-Inspect lifecycle events, active calls, and Docker health:
-
-```text
-docker logs unity
-docker exec unity compose-unity sidecar status
-docker inspect --format '{{.State.Health.Status}}' unity
-```
-
-Logs contain sanitized `READY`, `START`, `END`, `FAILED`, `CANCELLED`, `TIMEOUT`, and `ORPHANED` summaries. Full Unity output remains attached to the originating `docker exec` call. Health checks are offline and remain healthy while builds are active.
-
-An explicit command overrides the default sidecar command, preserving one-off usage:
-
-```text
-docker run --rm faulo/compose-unity:latest compose-unity exec unity-build ...
-```
-
-The former `compose-unity-sidecar` executable name remains as a deprecated
-compatibility link so existing Compose deployments continue to start. New
-deployments and probes should use the explicit `compose-unity sidecar ...`
-form. The compatibility link may be removed in a future major release.
+That sidecar can be utilized by the `withUnity` command of [jenkins-unity](https://github.com/Faulo/jenkins-unity).
 
 ## Optional MCP Server
 
 Both images default `COMPOSE_UNITY_MCP` to `0`. Set it to `1` to run the sidecar
 supervisor and an official ASP.NET Core Streamable HTTP MCP server together.
-The endpoint is fixed at `/mcp` on container port `8080`. An unset value or `0`
-keeps the existing sidecar-only behavior. Every other value logs a warning and
-leaves MCP disabled; only the exact value `1` enables it.
+The endpoint is fixed at `/mcp` on container port `8080`.
 
 The MCP sidecar controls persistent Unity worker containers, so it must be able
 to access the same local Docker Engine that runs it. Publish the endpoint only
@@ -261,21 +197,29 @@ services:
   unity:
     image: faulo/compose-unity:latest
     environment:
-      COMPOSE_UNITY_MCP: "1"
-      UNITY_CREDENTIALS_USR:
-      UNITY_CREDENTIALS_PSW:
-      EMAIL_CREDENTIALS_USR:
-      EMAIL_CREDENTIALS_PSW:
+      - COMPOSE_UNITY_MCP="1"
+      - UNITY_CREDENTIALS_USR
+      - UNITY_CREDENTIALS_PSR
+      - EMAIL_CREDENTIALS_USR
+      - EMAIL_CREDENTIALS_PSW
     ports:
       - "127.0.0.1:1234:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - unity-binaries:/root/Unity
       - unity-config:/root/.config/unity3d
+      - unity-hub:/root/.config/unityhub
+      - unity-cache:/root/.cache/Unity
+      - unity-license:/root/.local/share/unity3d
+    tmpfs:
+      - /compose-unity/webgl
 
 volumes:
   unity-binaries:
   unity-config:
+  unity-hub:
+  unity-cache:
+  unity-license:
 ```
 
 The equivalent Windows container uses the Docker Engine named pipe and Windows
@@ -286,30 +230,30 @@ services:
   unity:
     image: faulo/compose-unity:latest
     environment:
-      COMPOSE_UNITY_MCP: "1"
-      UNITY_CREDENTIALS_USR:
-      UNITY_CREDENTIALS_PSW:
-      EMAIL_CREDENTIALS_USR:
-      EMAIL_CREDENTIALS_PSW:
+      - COMPOSE_UNITY_MCP="1"
+      - UNITY_CREDENTIALS_USR
+      - UNITY_CREDENTIALS_PSR
+      - EMAIL_CREDENTIALS_USR
+      - EMAIL_CREDENTIALS_PSW
     ports:
       - "127.0.0.1:1234:8080"
     volumes:
-      - type: npipe
-        source: '\\.\pipe\docker_engine'
-        target: '\\.\pipe\docker_engine'
-      - type: volume
-        source: unity-binaries
-        target: 'C:\Program Files\Unity\Hub\Editor'
-      - type: volume
-        source: unity-config
-        target: 'C:\Users\ContainerAdministrator\AppData\Roaming\Unity'
+      - \\.\pipe\docker_engine_windows:\\.\pipe\docker_engine
+      - unity-binaries:C:/Program Files/Unity/Hub/Editor
+      - unity-config:C:/Users/ContainerAdministrator/AppData/Roaming/Unity
+      - unity-hub:C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub
+      - unity-cache:C:/Users/ContainerAdministrator/AppData/Local/Unity
+      - unity-license:C:/ProgramData/Unity
 
 volumes:
   unity-binaries:
   unity-config:
+  unity-hub:
+  unity-cache:
+  unity-license:
 ```
 
-Configure Codex to connect over HTTP rather than launch a subprocess:
+Agent MCP configuration uses the same IP/port declared by the container:
 
 ```toml
 [mcp_servers.unity]
@@ -344,34 +288,7 @@ The server advertises exactly four tools:
   browser-ready URL on the MCP listener. The project must provide
   `net.slothsoft.unity-extensions`; the tool does not change package state.
 
-Pass `projectRoot` as a path understood by the Docker daemon. Docker Desktop
-users can pass a natural Windows host path such as
-`C:\Users\name\projects\game` to a Linux sidecar; the sidecar sends it to the
-daemon unchanged and uses the daemon-reported bind source after validation.
-The path must contain `Assets`, `Packages`, and `ProjectSettings` directories.
-
-One worker is retained for each normalized project, immutable controller image,
-and effective worker configuration. Only the three project directories are
-bind-mounted writable; the worker's `Library` remains in its container layer so
-imports survive later calls and stay specific to that image and container OS.
-Workers inherit known
-Unity editor, cache, configuration, licensing, and Steam volumes, applicable
-resource limits and GPU device configuration, and only these environment
-variables when present: `UNITY_NO_GRAPHICS`, `UNITY_ACCELERATOR_ENDPOINT`,
-`UNITY_ACCELERATOR_PARAMS`, `UNITY_LOGGING`, `UNITY_EMPTY_MANIFEST`,
-`UNITY_CREDENTIALS_USR`, `UNITY_CREDENTIALS_PSW`, `EMAIL_CREDENTIALS_USR`,
-`EMAIL_CREDENTIALS_PSW`, and `COMPOSE_UNITY_CALL_TIMEOUT`. The Docker socket or
-named pipe is never passed to workers. A canonical fingerprint covers the image
-ID, project identity, forwarded environment, inherited state mounts, resource
-limits, isolation, and device configuration. A retained worker whose fingerprint
-does not match is replaced before use.
-
-Calls use a FIFO lane per project. A daemon-wide project lock also prevents
-overlapping Unity operations from duplicate sidecars or different image
-revisions. Sidecar shutdown stops accepting MCP calls and gracefully stops any
-worker currently executing one, which invokes the existing Unity process-tree
-shutdown policy while retaining the worker container and its imported
-`Library` for restart.
+None of the tools mutate project state by themselves, tho Unity may change asset files when executed.
 
 ### WebGL document root
 
@@ -392,33 +309,7 @@ The sidecar document-root paths are:
 
 Without a mount, builds live in the sidecar's writable container layer and
 disappear with that container. Mount the directory as tmpfs for explicitly
-temporary storage. This Linux Compose fragment keeps WebGL output in memory:
-
-```yaml
-services:
-  unity:
-    tmpfs:
-      - /compose-unity/webgl
-```
-
-Use a named volume when builds should survive sidecar replacement:
-
-```yaml
-services:
-  unity:
-    volumes:
-      - unity-webgl:/compose-unity/webgl
-
-volumes:
-  unity-webgl:
-```
-
-The equivalent Windows volume target is `C:\compose-unity\webgl`. A bind mount
-may be used instead when the host should manage or inspect the files directly.
-The sidecar performs no
-retention or pruning and serves whatever is already present after startup.
-Interrupted transfers can leave visible partial timestamp directories; their
-unreturned URLs are never reused.
+temporary storage.
 
 The server supports Unity's uncompressed, gzip, Brotli, decompression-fallback,
 and WebAssembly files with their required MIME types and content encodings. It
@@ -473,18 +364,3 @@ the LTSC 2019 container can run on Windows Server 2022. CI runs the daemon-free
 suite plus Linux and Windows daemon fixtures before image builds. Full Unity
 invocation remains in the local image test scripts because editor downloads and
 licensing make it unsuitable for the lightweight CI harness.
-
-The Windows image also compiles a Unity Hub launcher that adapts headless command-line arguments for Windows containers. Its embedded Hub runtime is patched to retry interrupted downloads and launch Editor installers directly instead of waiting for unavailable UAC interaction.
-
-Windows containers do not provide the interactive desktop shell expected by
-`FindExecutableW` and `ShellExecuteExW`. The image replaces both 64-bit and
-32-bit `SHELL32.dll` with compatibility proxies that preserve all original
-exports while resolving registered file associations through `SHLWAPI` and
-launching executables through `CreateProcessW`. The original Microsoft DLLs
-remain beside the proxies as `shell32real.dll` and handle all other shell APIs.
-During the image build, each original DLL must have a valid Microsoft signature,
-match the selected Windows build family and architecture, and expose exactly the
-ordinal/name map expected by its proxy. This permits compatible monthly Windows
-servicing updates without maintaining hashes for Microsoft binaries while still
-rejecting tampered or export-incompatible replacements. The checked-in proxy
-binaries remain protected by exact SHA-256 checksums.
