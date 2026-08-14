@@ -10,7 +10,6 @@
       <dependency id="zip" />
       <dependency id="nano" />
       <dependency id="curl" />
-      <dependency id="docker-cli" />
       <dependency id="nodejs" />
       <dependency id="blender" />
       <dependency id="butler" />

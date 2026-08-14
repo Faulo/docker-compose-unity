@@ -228,9 +228,7 @@ RUN git config --global --add safe.directory *; \
     npm --version; \
     if ($LASTEXITCODE -ne 0) { throw 'npm smoke check failed' }; \
     dotnet --version; \
-    if ($LASTEXITCODE -ne 0) { throw '.NET smoke check failed' }; \
-    docker --version; \
-    if ($LASTEXITCODE -ne 0) { throw 'Docker smoke check failed' }
+    if ($LASTEXITCODE -ne 0) { throw '.NET smoke check failed' }
 
 # Farah
 ENV COMPOSE_UNITY="composer -d C:/unity"
