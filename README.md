@@ -137,7 +137,7 @@ state, caches, and licensing data on Linux:
 
 ```yaml
 volumes:
-  - steam:C:/steam
+  - steam:/root/Steam
   - unity-binaries:/root/Unity
   - unity-config:/root/.config/unity3d
   - unity-hub:/root/.config/unityhub
@@ -149,7 +149,7 @@ The equivalent Windows volume mappings are:
 
 ```yaml
 volumes:
-  - steam:/root/Steam
+  - steam:C:/steam
   - unity-binaries:C:/Program Files/Unity/Hub/Editor
   - unity-config:C:/Users/ContainerAdministrator/AppData/Roaming/Unity
   - unity-hub:C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub
@@ -197,9 +197,9 @@ services:
   unity:
     image: faulo/compose-unity:latest
     environment:
-      - COMPOSE_UNITY_MCP="1"
+      - COMPOSE_UNITY_MCP=1
       - UNITY_CREDENTIALS_USR
-      - UNITY_CREDENTIALS_PSR
+      - UNITY_CREDENTIALS_PSW
       - EMAIL_CREDENTIALS_USR
       - EMAIL_CREDENTIALS_PSW
     ports:
@@ -230,15 +230,15 @@ services:
   unity:
     image: faulo/compose-unity:latest
     environment:
-      - COMPOSE_UNITY_MCP="1"
+      - COMPOSE_UNITY_MCP=1
       - UNITY_CREDENTIALS_USR
-      - UNITY_CREDENTIALS_PSR
+      - UNITY_CREDENTIALS_PSW
       - EMAIL_CREDENTIALS_USR
       - EMAIL_CREDENTIALS_PSW
     ports:
       - "127.0.0.1:1234:8080"
     volumes:
-      - \\.\pipe\docker_engine_windows:\\.\pipe\docker_engine
+      - \\.\pipe\docker_engine:\\.\pipe\docker_engine
       - unity-binaries:C:/Program Files/Unity/Hub/Editor
       - unity-config:C:/Users/ContainerAdministrator/AppData/Roaming/Unity
       - unity-hub:C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub
@@ -253,7 +253,8 @@ volumes:
   unity-license:
 ```
 
-Agent MCP configuration uses the same IP/port declared by the container:
+For example, Codex MCP configuration uses the same IP and port published by the
+container:
 
 ```toml
 [mcp_servers.unity]
@@ -288,7 +289,9 @@ The server advertises exactly four tools:
   browser-ready URL on the MCP listener. The project must provide
   `net.slothsoft.unity-extensions`; the tool does not change package state.
 
-None of the tools mutate project state by themselves, tho Unity may change asset files when executed.
+`get_project_info` mounts the project read-only. The other tools mount project
+state writable; the controller does not modify those files directly, but Unity
+or an executed editor method may change them.
 
 ### WebGL document root
 
@@ -338,7 +341,7 @@ and per-project FIFO behavior.
 
 Real-daemon tests live in a separate project because they build disposable
 `tmp/compose-unity-daemon-tests` images and create containers, bind mounts,
-execs, and MCP worker state on every available local daemon:
+execs, and MCP worker state on each available explicitly named local daemon:
 
 ```text
 dotnet test common/ComposeUnity.DaemonTests/ComposeUnity.DaemonTests.csproj --configuration Release
