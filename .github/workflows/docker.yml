@@ -55,7 +55,7 @@ jobs:
                   $standardOutput = Join-Path $env:RUNNER_TEMP "dockerd.stdout.log"
                   $standardError = Join-Path $env:RUNNER_TEMP "dockerd.stderr.log"
                   $daemon = Start-Process -FilePath (Get-Command dockerd).Source `
-                      -ArgumentList "--host=npipe:////./pipe/docker_engine", "--exec-opt=isolation=hyperv" `
+                      -ArgumentList "--exec-opt=isolation=hyperv" `
                       -RedirectStandardOutput $standardOutput -RedirectStandardError $standardError `
                       -WindowStyle Hidden -PassThru
                   for ($attempt = 1; $attempt -le 60; $attempt++) {
