@@ -203,7 +203,7 @@ services:
       - EMAIL_CREDENTIALS_USR
       - EMAIL_CREDENTIALS_PSW
     ports:
-      - "127.0.0.1:1234:8080"
+      - "127.0.0.1:3310:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - unity-binaries:/root/Unity
@@ -236,7 +236,7 @@ services:
       - EMAIL_CREDENTIALS_USR
       - EMAIL_CREDENTIALS_PSW
     ports:
-      - "127.0.0.1:1234:8080"
+      - "127.0.0.1:3310:8080"
     volumes:
       - \\.\pipe\docker_engine:\\.\pipe\docker_engine
       - unity-binaries:C:/Program Files/Unity/Hub/Editor
@@ -258,7 +258,7 @@ container:
 
 ```toml
 [mcp_servers.unity]
-url = "http://127.0.0.1:1234/mcp"
+url = "http://127.0.0.1:3310/mcp"
 tool_timeout_sec = 1800
 ```
 
@@ -302,7 +302,7 @@ enabled, while an `index.html` file takes priority as the directory index. A
 build URL therefore has this form:
 
 ```text
-http://127.0.0.1:1234/webgl/example-game/2026-08-14_18-42-07Z/
+http://127.0.0.1:3310/webgl/example-game/2026-08-14_18-42-07Z/
 ```
 
 The sidecar document-root paths are:
