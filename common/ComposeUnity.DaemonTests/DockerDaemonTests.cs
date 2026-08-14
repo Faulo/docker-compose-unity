@@ -99,9 +99,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             .Select(tool => tool!["name"]!.GetValue<string>())
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.That(names, Is.EqualTo(new[] { "execute_method", "project_info", "run_tests" }));
+        Assert.That(names, Is.EqualTo(new[] { "execute_method", "get_project_info", "run_tests" }));
 
-        var response = await CallToolAsync("project_info", new JsonObject { ["projectRoot"] = project });
+        var response = await CallToolAsync("get_project_info", new JsonObject { ["projectRoot"] = project });
         Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
         var result = ToolResult(response);
         using (Assert.EnterMultipleScope()) {

@@ -136,7 +136,7 @@ sealed class McpServerRuntime : IAsyncDisposable {
 [McpServerToolType]
 sealed class UnityMcpTools(UnityMcpController controller) {
     [McpServerTool(
-        Name = "project_info",
+        Name = "get_project_info",
         ReadOnly = true,
         Destructive = false,
         Idempotent = true,

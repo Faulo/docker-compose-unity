@@ -144,7 +144,7 @@ sealed class UnityMcpController : IAsyncDisposable {
     internal async Task<object> ProjectInfoAsync(string projectRoot, CancellationToken cancellationToken) {
         var started = DateTimeOffset.UtcNow;
         var project = await GetProjectAsync(projectRoot, cancellationToken);
-        LogStart("project_info", project.id);
+        LogStart("get_project_info", project.id);
         try {
             return new {
                 projectRoot = project.normalizedRoot,
@@ -158,7 +158,7 @@ sealed class UnityMcpController : IAsyncDisposable {
                 project.probe.packages
             };
         } finally {
-            LogEnd("project_info", project.id, started);
+            LogEnd("get_project_info", project.id, started);
         }
     }
 
