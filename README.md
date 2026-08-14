@@ -37,7 +37,12 @@ directly for Unity's Blender-to-FBX import workflow.
 
 Build inputs are organized by ownership:
 
-- `common/` contains shared cross-platform launcher and sidecar source.
+- `common/ComposeUnity/` contains the shared cross-platform launcher and
+  sidecar source, targeting .NET 9.0 by default.
+- `common/ComposeUnity.Tests/` contains daemon-free unit tests and their Unity
+  project fixtures.
+- `common/ComposeUnity.IntegrationTests/` contains the disposable Docker
+  end-to-end test for the MCP `project_info` tool.
 - `linux/` contains the Linux Dockerfile and machine identity.
 - `windows/` contains the Windows Dockerfile, Hub launcher and patch, Chocolatey package, and PHP extension configuration.
 
@@ -233,11 +238,15 @@ pinned test versions:
 compose-unity exec unity-empty-project test 2021.3.45f2
 ```
 
-Both images compile the shared C# source in `common/` into native launchers named `compose-unity` and `compose-unity-sidecar`. The launcher invokes Composer without an intermediate shell, preserves attached input, output, and exit status, and registers each call with the sidecar.
+Both images compile the shared C# source in `common/ComposeUnity/` into one
+canonical native launcher named `compose-unity`. The launcher invokes Composer
+without an intermediate shell, preserves attached input, output, and exit
+status, and registers each call with the sidecar.
 
 ## Long-Running Sidecar
 
-With no explicit command, the image starts `compose-unity-sidecar` as PID 1. Start a Linux sidecar with persistent editor and Unity state volumes:
+With no explicit command, the image starts `compose-unity sidecar` as PID 1.
+Start a Linux sidecar with persistent editor and Unity state volumes:
 
 ```text
 docker run -d --name unity \
@@ -275,7 +284,7 @@ Inspect lifecycle events, active calls, and Docker health:
 
 ```text
 docker logs unity
-docker exec unity compose-unity-sidecar status
+docker exec unity compose-unity sidecar status
 docker inspect --format '{{.State.Health.Status}}' unity
 ```
 
@@ -286,6 +295,11 @@ An explicit command overrides the default sidecar command, preserving one-off us
 ```text
 docker run --rm faulo/compose-unity:latest compose-unity exec unity-build ...
 ```
+
+The former `compose-unity-sidecar` executable name remains as a deprecated
+compatibility link so existing Compose deployments continue to start. New
+deployments and probes should use the explicit `compose-unity sidecar ...`
+form. The compatibility link may be removed in a future major release.
 
 ## Optional MCP Server
 
@@ -366,7 +380,9 @@ The server advertises exactly three tools:
   input handling, and complete package manifest by reading the project's YAML
   and JSON files directly. It never installs or launches Unity. Unity defaults
   that are absent from the serialized project remain explicit as empty override
-  maps rather than inferred values.
+  maps rather than inferred values. `ProjectSettings/GraphicsSettings.asset`
+  is optional; projects without it report the affected rendering settings as
+  `Unknown`.
 - `run_tests` accepts one or more Unity test modes. A valid JUnit report returns
   `outcome` (`passed` or `failed`), `exitCode`, total/passed/failure/error/skipped
   counts, duration, and up to 100 failure details with complete stack traces.
@@ -407,6 +423,37 @@ MCP startup is included in sidecar readiness, `status`, and Docker health when
 enabled. Startup fails if Docker Engine access or self-container inspection is
 unavailable. The server accepts loopback `Host` and `Origin` values only; it
 does not provide authentication and is not intended for remote publication.
+
+## ComposeUnity Tests
+
+Run the daemon-free test suite with the .NET 9 SDK:
+
+```text
+dotnet test docker-compose-unity.sln --configuration Release
+```
+
+The suite covers command routing and legacy compatibility, configuration and
+sanitization, project probing (including optional graphics settings), Unity
+JUnit result parsing, Docker stream framing, state persistence, path handling,
+and per-project FIFO behavior.
+
+The MCP `project_info` path has a separate end-to-end test. It builds a small
+disposable image under the permitted `tmp/` namespace, starts a sidecar against
+the explicitly selected local Docker context, verifies the advertised tool set,
+and calls `project_info` against the checked-in project fixture:
+
+```powershell
+./common/ComposeUnity.IntegrationTests/project-info.ps1 -Context linux
+./common/ComposeUnity.IntegrationTests/project-info.ps1 -Context windows `
+    -Image tmp/compose-unity:latest -SkipBuild
+```
+
+The lightweight integration Dockerfile is Linux-only. The Windows command
+reuses a previously built production image so it also validates the real
+Windows launcher and image configuration. GitHub Actions runs the daemon-free
+suite and Linux end-to-end test before image builds. Full Unity invocation
+remains in the local image test scripts because editor downloads and licensing
+make it unsuitable for the lightweight CI harness.
 
 The Windows image also compiles a Unity Hub launcher that adapts headless command-line arguments for Windows containers. Its embedded Hub runtime is patched to retry interrupted downloads and launch Editor installers directly instead of waiting for unavailable UAC interaction.
 

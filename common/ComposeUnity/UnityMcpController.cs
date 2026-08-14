@@ -88,10 +88,6 @@ sealed class UnityMcpController : IAsyncDisposable {
         get => windowsContainers ? @"C:\workspace\project" : "/var/workspace/project";
     }
 
-    string SidecarExecutable {
-        get => windowsContainers ? "compose-unity-sidecar.exe" : "compose-unity-sidecar";
-    }
-
     string ComposeExecutable {
         get => windowsContainers ? "compose-unity.exe" : "compose-unity";
     }
@@ -291,7 +287,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         try {
             var configuration = new JsonObject {
                 ["Image"] = imageId,
-                ["Cmd"] = DockerEngineClient.ToArray([SidecarExecutable, "probe-project", ProbeProjectRoot]),
+                ["Cmd"] = DockerEngineClient.ToArray([ComposeExecutable, "sidecar", "probe-project", ProbeProjectRoot]),
                 ["Labels"] = Labels("probe", null),
                 ["HostConfig"] = new JsonObject {
                     ["Mounts"] = new JsonArray {
@@ -328,7 +324,7 @@ sealed class UnityMcpController : IAsyncDisposable {
                             output.standardOutput,
                             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                         ?? throw new InvalidOperationException("the project validation probe returned no project information");
-            return new ValidatedProject(normalizedRoot, Hash(ProjectIdentityPath(normalizedRoot)), probe);
+            return new ValidatedProject(normalizedRoot, Hash(ProjectIdentityPath(normalizedRoot, windowsContainers)), probe);
         } catch (Exception exception) when (exception is not OperationCanceledException) {
             throw new InvalidOperationException(
                 $"Unity project validation failed for '{suppliedRoot}': {exception.Message}",
@@ -371,7 +367,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         var hostConfiguration = new JsonObject();
         var selfHostConfiguration = self["HostConfig"]?.AsObject() ?? new JsonObject();
         foreach (string name in InheritedHostConfigurationNames) {
-            JsonNode? value = selfHostConfiguration[name];
+            var value = selfHostConfiguration[name];
             if (value is not null) {
                 hostConfiguration[name] = value.DeepClone();
             }
@@ -389,8 +385,8 @@ sealed class UnityMcpController : IAsyncDisposable {
         foreach (string directory in new[] { "Assets", "Packages", "ProjectSettings" }) {
             mounts.Add(new JsonObject {
                 ["Type"] = "bind",
-                ["Source"] = CombineDaemonPath(project.normalizedRoot, directory),
-                ["Target"] = CombineContainerPath(WorkerProjectRoot, directory),
+                ["Source"] = CombineDaemonPath(project.normalizedRoot, directory, windowsContainers),
+                ["Target"] = CombineContainerPath(WorkerProjectRoot, directory, windowsContainers),
                 ["ReadOnly"] = false,
                 ["BindOptions"] = new JsonObject { ["CreateMountpoint"] = false }
             });
@@ -486,6 +482,11 @@ sealed class UnityMcpController : IAsyncDisposable {
                 }
 
                 string? owner = labels[$"{LABEL_PREFIX}.controller"]?.GetValue<string>();
+                if (owner == controllerId) {
+                    await docker.RemoveContainerAsync(name, true, true, cancellationToken);
+                    continue;
+                }
+
                 var ownerContainer = string.IsNullOrWhiteSpace(owner)
                     ? null
                     : await docker.TryInspectContainerAsync(owner, cancellationToken);
@@ -509,7 +510,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         return labels;
     }
 
-    static object BuildTestResult(ExecResult result) {
+    internal static object BuildTestResult(ExecResult result) {
         try {
             var document = XDocument.Parse(result.standardOutput, LoadOptions.None);
             var suites = document.Descendants("testsuite").ToList();
@@ -582,7 +583,7 @@ sealed class UnityMcpController : IAsyncDisposable {
             : trimmed[..maximumLength] + "\n[output truncated]";
     }
 
-    static string NormalizeDaemonPath(string path) {
+    internal static string NormalizeDaemonPath(string path) {
         int rootLength = Path.GetPathRoot(path)?.Length ?? 0;
         while (path.Length > rootLength && (path.EndsWith('/') || path.EndsWith('\\'))) {
             path = path[..^1];
@@ -591,19 +592,19 @@ sealed class UnityMcpController : IAsyncDisposable {
         return path;
     }
 
-    string ProjectIdentityPath(string path) =>
+    internal static string ProjectIdentityPath(string path, bool windowsContainers) =>
         windowsContainers || LooksLikeWindowsHostPath(path) ? path.ToUpperInvariant() : path;
 
-    static bool LooksLikeWindowsHostPath(string path) =>
+    internal static bool LooksLikeWindowsHostPath(string path) =>
         path.Length >= 3
         && char.IsAsciiLetter(path[0])
         && path[1] == ':'
         && path[2] is '\\' or '/';
 
-    string CombineDaemonPath(string root, string child) =>
+    internal static string CombineDaemonPath(string root, string child, bool windowsContainers) =>
         windowsContainers ? Path.Combine(root, child) : root + "/" + child;
 
-    string CombineContainerPath(string root, string child) =>
+    internal static string CombineContainerPath(string root, string child, bool windowsContainers) =>
         windowsContainers ? root + "\\" + child : root + "/" + child;
 
     static string Hash(string value) =>

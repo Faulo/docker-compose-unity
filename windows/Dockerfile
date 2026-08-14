@@ -242,7 +242,7 @@ ENV UNITY_NO_GRAPHICS="1"
 # documented CLI syntax externally and translate it before launching Hub.
 COPY ["windows/Unity Hub.cs", "C:/unity/Unity Hub.cs"]
 COPY ["windows/SteamCmd.cs", "C:/unity/SteamCmd.cs"]
-COPY common C:/unity/compose-unity
+COPY common/ComposeUnity C:/unity/compose-unity
 RUN $project = 'C:\unity\launcher.csproj'; \
     $hubSource = 'C:\unity\Unity Hub.cs'; \
     $steamCmdSource = 'C:\unity\SteamCmd.cs'; \
@@ -283,7 +283,7 @@ RUN $project = 'C:\unity\launcher.csproj'; \
     New-Item -ItemType Directory -Path C:\steamcmd | Out-Null; \
     Move-Item -LiteralPath $steamCmdArtifacts[0].FullName -Destination C:\steamcmd\steamcmd.exe; \
     Copy-Item -LiteralPath $composeArtifacts[0].FullName -Destination C:\Windows\compose-unity.exe; \
-    Copy-Item -LiteralPath $composeArtifacts[0].FullName -Destination C:\Windows\compose-unity-sidecar.exe; \
+    New-Item -ItemType HardLink -Path C:\Windows\compose-unity-sidecar.exe -Target C:\Windows\compose-unity.exe | Out-Null; \
     Remove-Item -LiteralPath $project, $hubSource, $steamCmdSource -Force; \
     Remove-Item -LiteralPath C:\unity\bin, C:\unity\obj, C:\unity\compose-unity, $hubPublish, $steamCmdPublish, $composePublish -Recurse -Force
 
@@ -344,6 +344,6 @@ VOLUME ["C:/Program Files/Unity/Hub/Editor", "C:/steam", "C:/Users/ContainerAdmi
 EXPOSE 8080
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD ["compose-unity-sidecar.exe", "health"]
+    CMD ["compose-unity.exe", "sidecar", "health"]
 
-CMD ["compose-unity-sidecar.exe"]
+CMD ["compose-unity.exe", "sidecar"]

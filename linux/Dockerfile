@@ -198,7 +198,7 @@ ENV UNITY_ACCELERATOR_ENDPOINT=""
 ENV UNITY_NO_GRAPHICS="1"
 
 COPY --chmod=755 --from=composer:2 /usr/bin/composer /usr/local/bin/composer
-COPY common /tmp/compose-unity
+COPY common/ComposeUnity /tmp/compose-unity
 RUN set -eux; \
     case "$(dpkg --print-architecture)" in \
       amd64) runtime_id="linux-x64" ;; \
@@ -213,7 +213,7 @@ RUN set -eux; \
         -p:RuntimeIdentifier="$runtime_id"; \
     test "$(find /tmp/compose-unity/publish -maxdepth 1 -type f | wc -l)" -eq 1; \
     install -m 0755 /tmp/compose-unity/publish/compose-unity /usr/local/bin/compose-unity; \
-    install -m 0755 /tmp/compose-unity/publish/compose-unity /usr/local/bin/compose-unity-sidecar; \
+    ln -s compose-unity /usr/local/bin/compose-unity-sidecar; \
     rm -rf /tmp/compose-unity
 
 ENV COMPOSE_UNITY_CALL_TIMEOUT="86400"
@@ -235,6 +235,6 @@ VOLUME ["/root/Unity", "/root/Steam", "/root/.config/unity3d", "/root/.config/un
 EXPOSE 8080
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD ["compose-unity-sidecar", "health"]
+    CMD ["compose-unity", "sidecar", "health"]
 
-CMD ["compose-unity-sidecar"]
+CMD ["compose-unity", "sidecar"]

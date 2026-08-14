@@ -38,10 +38,10 @@ sealed class DockerEngineClient : IAsyncDisposable {
     }
 
     internal async Task<JsonObject> InspectSelfAsync(CancellationToken cancellationToken) {
-        string?[] candidates = new[] { Environment.GetEnvironmentVariable("HOSTNAME"), Environment.MachineName };
-
-        foreach (string? candidate in candidates.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase)) {
-            var inspected = await TryInspectContainerAsync(candidate!, cancellationToken);
+        foreach (string candidate in SelfInspectionCandidates(
+                     Environment.GetEnvironmentVariable("HOSTNAME"),
+                     Environment.MachineName)) {
+            var inspected = await TryInspectContainerAsync(candidate, cancellationToken);
             if (inspected is not null) {
                 return inspected;
             }
@@ -51,6 +51,13 @@ sealed class DockerEngineClient : IAsyncDisposable {
             "Docker Engine access is available, but the sidecar could not inspect its own container. " +
             "Mount the platform Docker socket/pipe and do not override the container hostname.");
     }
+
+    internal static IReadOnlyList<string> SelfInspectionCandidates(string? hostname, string machineName) =>
+        new[] { hostname, machineName }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .SelectMany(value => new[] { value!.ToLowerInvariant(), value })
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
     internal async Task<string> CreateContainerAsync(string name, JsonObject configuration, CancellationToken cancellationToken) {
         var result = await SendJsonAsync(
@@ -223,7 +230,7 @@ sealed class DockerEngineClient : IAsyncDisposable {
         }
     }
 
-    static async Task<CapturedOutput> ReadMultiplexedAsync(Stream stream, CancellationToken cancellationToken) {
+    internal static async Task<CapturedOutput> ReadMultiplexedAsync(Stream stream, CancellationToken cancellationToken) {
         using var standardOutput = new MemoryStream();
         using var standardError = new MemoryStream();
         using var combinedOutput = new MemoryStream();

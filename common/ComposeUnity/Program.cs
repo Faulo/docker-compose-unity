@@ -11,14 +11,43 @@ static class Program {
     static readonly TimeSpan TerminationGracePeriod = TimeSpan.FromSeconds(10);
 
     public static async Task<int> Main(string[] args) {
-        string executable = Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? "compose-unity");
+        string executable = ResolveExecutable(
+            Environment.ProcessPath,
+            Environment.GetCommandLineArgs(),
+            ReadKernelExecutableArgument());
         try {
-            return executable.Equals("compose-unity-sidecar", StringComparison.OrdinalIgnoreCase)
-                ? await RunSidecarCommandAsync(args)
-                : await RunComposeUnityAsync(args);
+            var command = CommandRouter.Route(executable, args);
+            return command.mode == EApplicationMode.SIDECAR
+                ? await RunSidecarCommandAsync(command.arguments)
+                : await RunComposeUnityAsync(command.arguments);
         } catch (Exception exception) {
             Console.Error.WriteLine($"{executable}: {exception.Message}");
             return 1;
+        }
+    }
+
+    internal static string ResolveExecutable(
+        string? processPath,
+        IReadOnlyList<string> commandLineArguments,
+        string? kernelExecutableArgument = null) {
+        string path = kernelExecutableArgument
+                      ?? (commandLineArguments.Count > 0
+            ? commandLineArguments[0]
+            : processPath ?? "compose-unity");
+        return Path.GetFileNameWithoutExtension(path);
+    }
+
+    static string? ReadKernelExecutableArgument() {
+        if (!OperatingSystem.IsLinux()) {
+            return null;
+        }
+
+        try {
+            byte[] commandLine = File.ReadAllBytes("/proc/self/cmdline");
+            int terminator = Array.IndexOf(commandLine, (byte)0);
+            return Encoding.UTF8.GetString(commandLine, 0, terminator >= 0 ? terminator : commandLine.Length);
+        } catch {
+            return null;
         }
     }
 
@@ -39,7 +68,7 @@ static class Program {
             return ProjectProbe.Run(args[1]);
         }
 
-        Console.Error.WriteLine("Usage: compose-unity-sidecar [status|health]");
+        Console.Error.WriteLine("Usage: compose-unity sidecar [status|health]");
         return 2;
     }
 
@@ -265,8 +294,10 @@ static class Program {
             $"{lifecycleEvent.kind} id={lifecycleEvent.id} pid={lifecycleEvent.pid} command={lifecycleEvent.command} cwd={lifecycleEvent.workingDirectory}{timeout}{exit}{duration}{message}");
     }
 
-    static long ParseTimeout() {
-        string? value = Environment.GetEnvironmentVariable("COMPOSE_UNITY_CALL_TIMEOUT");
+    static long ParseTimeout() =>
+        ParseTimeout(Environment.GetEnvironmentVariable("COMPOSE_UNITY_CALL_TIMEOUT"));
+
+    internal static long ParseTimeout(string? value) {
         if (string.IsNullOrWhiteSpace(value)) {
             return DEFAULT_TIMEOUT_SECONDS;
         }
@@ -290,7 +321,7 @@ static class Program {
         }
     }
 
-    static DateTimeOffset? ResolveDeadline(DateTimeOffset startedAt, long timeoutSeconds) {
+    internal static DateTimeOffset? ResolveDeadline(DateTimeOffset startedAt, long timeoutSeconds) {
         if (timeoutSeconds == 0) {
             return null;
         }
@@ -302,7 +333,7 @@ static class Program {
         }
     }
 
-    static string SanitizeCommand(string[] args) {
+    internal static string SanitizeCommand(string[] args) {
         int index = Array.FindIndex(args, argument => argument.Equals("exec", StringComparison.OrdinalIgnoreCase));
         int commandIndex = index + 1;
         while (commandIndex > 0 && commandIndex < args.Length && args[commandIndex] == "--") {
@@ -316,7 +347,7 @@ static class Program {
         return string.IsNullOrEmpty(sanitized) ? "unknown" : sanitized;
     }
 
-    static string SanitizeText(string? value, int maximumLength) {
+    internal static string SanitizeText(string? value, int maximumLength) {
         if (string.IsNullOrEmpty(value)) {
             return "-";
         }
@@ -325,7 +356,7 @@ static class Program {
         return normalized.Length <= maximumLength ? normalized : normalized[..maximumLength];
     }
 
-    static string FormatDuration(TimeSpan duration) {
+    internal static string FormatDuration(TimeSpan duration) {
         if (duration < TimeSpan.Zero) {
             duration = TimeSpan.Zero;
         }
@@ -397,6 +428,25 @@ static class Program {
     }
 }
 
+enum EApplicationMode {
+    COMPOSER,
+    SIDECAR
+}
+
+sealed record ApplicationCommand(EApplicationMode mode, string[] arguments);
+
+static class CommandRouter {
+    internal static ApplicationCommand Route(string executable, string[] arguments) {
+        if (executable.Equals("compose-unity-sidecar", StringComparison.OrdinalIgnoreCase)) {
+            return new ApplicationCommand(EApplicationMode.SIDECAR, arguments);
+        }
+
+        return arguments.Length > 0 && arguments[0].Equals("sidecar", StringComparison.OrdinalIgnoreCase)
+            ? new ApplicationCommand(EApplicationMode.SIDECAR, arguments[1..])
+            : new ApplicationCommand(EApplicationMode.COMPOSER, arguments);
+    }
+}
+
 sealed class StateStore {
     static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     readonly string activeDirectory;
@@ -404,8 +454,9 @@ sealed class StateStore {
     readonly string readyPath;
     readonly string root;
 
-    internal StateStore() {
-        root = Environment.GetEnvironmentVariable("COMPOSE_UNITY_STATE_DIRECTORY")
+    internal StateStore(string? rootOverride = null) {
+        root = rootOverride
+               ?? Environment.GetEnvironmentVariable("COMPOSE_UNITY_STATE_DIRECTORY")
                ?? (OperatingSystem.IsWindows()
                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "compose-unity")
                    : "/run/compose-unity");
@@ -757,11 +808,11 @@ static class WindowsProcessTree {
         try {
             ConfigureKillOnClose(job);
             var startupInfo = new StartupInfo {
-                Size = Marshal.SizeOf<StartupInfo>(),
-                Flags = STARTF_USE_STD_HANDLES,
-                StandardInput = GetStdHandle(STD_INPUT_HANDLE),
-                StandardOutput = GetStdHandle(STD_OUTPUT_HANDLE),
-                StandardError = GetStdHandle(STD_ERROR_HANDLE)
+                size = Marshal.SizeOf<StartupInfo>(),
+                flags = STARTF_USE_STD_HANDLES,
+                standardInput = GetStdHandle(STD_INPUT_HANDLE),
+                standardOutput = GetStdHandle(STD_OUTPUT_HANDLE),
+                standardError = GetStdHandle(STD_ERROR_HANDLE)
             };
             var commandLine = new StringBuilder(BuildCommandLine(startInfo));
             if (!CreateProcess(null, commandLine, IntPtr.Zero, IntPtr.Zero, true,
@@ -770,22 +821,22 @@ static class WindowsProcessTree {
                 throw NativeError("Failed to create suspended Composer process");
             }
 
-            if (!AssignProcessToJobObject(job, processInformation.Process)) {
-                CloseHandle(processInformation.Thread);
-                CloseHandle(processInformation.Process);
+            if (!AssignProcessToJobObject(job, processInformation.process)) {
+                CloseHandle(processInformation.thread);
+                CloseHandle(processInformation.process);
                 throw NativeError("Failed to assign Composer to Windows Job Object");
             }
 
-            var process = Process.GetProcessById((int)processInformation.ProcessId);
-            CloseHandle(processInformation.Process);
+            var process = Process.GetProcessById((int)processInformation.processId);
+            CloseHandle(processInformation.process);
             var jobHandle = new NativeHandle(job);
             job = IntPtr.Zero;
             return new ChildProcess(process, 0, jobName, () => {
-                if (ResumeThread(processInformation.Thread) == uint.MaxValue) {
+                if (ResumeThread(processInformation.thread) == uint.MaxValue) {
                     throw NativeError("Failed to resume Composer process");
                 }
 
-                CloseHandle(processInformation.Thread);
+                CloseHandle(processInformation.thread);
             }, jobHandle);
         } finally {
             if (job != IntPtr.Zero) {
@@ -822,7 +873,7 @@ static class WindowsProcessTree {
     }
 
     static void ConfigureKillOnClose(IntPtr job) {
-        var information = new JobObjectExtendedLimitInformation { BasicLimitInformation = new JobObjectBasicLimitInformation { LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE } };
+        var information = new JobObjectExtendedLimitInformation { basicLimitInformation = new JobObjectBasicLimitInformation { limitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE } };
         int size = Marshal.SizeOf<JobObjectExtendedLimitInformation>();
         IntPtr pointer = Marshal.AllocHGlobal(size);
         try {
@@ -881,65 +932,65 @@ static class WindowsProcessTree {
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     struct StartupInfo {
-        public int Size;
-        public string? Reserved;
-        public string? Desktop;
-        public string? Title;
-        public uint X;
-        public uint Y;
-        public uint XSize;
-        public uint YSize;
-        public uint XCountChars;
-        public uint YCountChars;
-        public uint FillAttribute;
-        public uint Flags;
-        public ushort ShowWindow;
-        public ushort Reserved2;
-        public IntPtr Reserved2Pointer;
-        public IntPtr StandardInput;
-        public IntPtr StandardOutput;
-        public IntPtr StandardError;
+        public int size;
+        public string? reserved;
+        public string? desktop;
+        public string? title;
+        public uint x;
+        public uint y;
+        public uint xSize;
+        public uint ySize;
+        public uint xCountChars;
+        public uint yCountChars;
+        public uint fillAttribute;
+        public uint flags;
+        public ushort showWindow;
+        public ushort reserved2;
+        public IntPtr reserved2Pointer;
+        public IntPtr standardInput;
+        public IntPtr standardOutput;
+        public IntPtr standardError;
     }
 
     [StructLayout(LayoutKind.Sequential)]
     struct ProcessInformation {
-        public IntPtr Process;
-        public IntPtr Thread;
-        public uint ProcessId;
-        public uint ThreadId;
+        public IntPtr process;
+        public IntPtr thread;
+        public uint processId;
+        public uint threadId;
     }
 
     [StructLayout(LayoutKind.Sequential)]
     struct JobObjectBasicLimitInformation {
-        public long PerProcessUserTimeLimit;
-        public long PerJobUserTimeLimit;
-        public uint LimitFlags;
-        public UIntPtr MinimumWorkingSetSize;
-        public UIntPtr MaximumWorkingSetSize;
-        public uint ActiveProcessLimit;
-        public UIntPtr Affinity;
-        public uint PriorityClass;
-        public uint SchedulingClass;
+        public long perProcessUserTimeLimit;
+        public long perJobUserTimeLimit;
+        public uint limitFlags;
+        public UIntPtr minimumWorkingSetSize;
+        public UIntPtr maximumWorkingSetSize;
+        public uint activeProcessLimit;
+        public UIntPtr affinity;
+        public uint priorityClass;
+        public uint schedulingClass;
     }
 
     [StructLayout(LayoutKind.Sequential)]
     struct IoCounters {
-        public ulong ReadOperationCount;
-        public ulong WriteOperationCount;
-        public ulong OtherOperationCount;
-        public ulong ReadTransferCount;
-        public ulong WriteTransferCount;
-        public ulong OtherTransferCount;
+        public ulong readOperationCount;
+        public ulong writeOperationCount;
+        public ulong otherOperationCount;
+        public ulong readTransferCount;
+        public ulong writeTransferCount;
+        public ulong otherTransferCount;
     }
 
     [StructLayout(LayoutKind.Sequential)]
     struct JobObjectExtendedLimitInformation {
-        public JobObjectBasicLimitInformation BasicLimitInformation;
-        public IoCounters IoInfo;
-        public UIntPtr ProcessMemoryLimit;
-        public UIntPtr JobMemoryLimit;
-        public UIntPtr PeakProcessMemoryUsed;
-        public UIntPtr PeakJobMemoryUsed;
+        public JobObjectBasicLimitInformation basicLimitInformation;
+        public IoCounters ioInfo;
+        public UIntPtr processMemoryLimit;
+        public UIntPtr jobMemoryLimit;
+        public UIntPtr peakProcessMemoryUsed;
+        public UIntPtr peakJobMemoryUsed;
     }
 }
 

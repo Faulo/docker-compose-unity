@@ -12,14 +12,15 @@ using ModelContextProtocol.Server;
 namespace ComposeUnity;
 
 static class McpActivation {
-    internal static bool Parse() {
-        string? value = Environment.GetEnvironmentVariable("COMPOSE_UNITY_MCP");
-        return value switch {
+    internal static bool Parse() =>
+        Parse(Environment.GetEnvironmentVariable("COMPOSE_UNITY_MCP"));
+
+    internal static bool Parse(string? value) =>
+        value switch {
             null or "" or "0" => false,
             "1" => true,
             _ => throw new ArgumentException("COMPOSE_UNITY_MCP must be unset, 0, or 1.")
         };
-    }
 }
 
 sealed class McpServerRuntime : IAsyncDisposable {
@@ -125,7 +126,7 @@ sealed class McpServerRuntime : IAsyncDisposable {
         }
     }
 
-    static bool IsLoopbackOrigin(string? value) {
+    internal static bool IsLoopbackOrigin(string? value) {
         return Uri.TryCreate(value, UriKind.Absolute, out var origin)
                && origin.IsLoopback
                && origin.Scheme is "http" or "https";

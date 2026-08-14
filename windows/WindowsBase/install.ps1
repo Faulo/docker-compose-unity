@@ -29,7 +29,11 @@ $arguments = @(
     '--add', 'Microsoft.VisualStudio.Workload.MSBuildTools',
     '--add', 'Microsoft.VisualStudio.Component.NuGet.BuildTools'
 )
-$process = Start-Process -FilePath $bootstrapper -ArgumentList $arguments -Wait -PassThru
+$process = Start-Process -FilePath $bootstrapper -ArgumentList $arguments -PassThru
+if (-not $process.WaitForExit(7200000)) {
+    taskkill.exe /PID $process.Id /T /F | Out-Null
+    throw 'Visual Studio Build Tools installer exceeded the two-hour timeout'
+}
 if ($process.ExitCode -ne 0) {
     throw "Visual Studio Build Tools installer failed with exit code $($process.ExitCode)"
 }

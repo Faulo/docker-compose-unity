@@ -10,58 +10,62 @@ static class ProjectProbe {
 
     internal static int Run(string projectRoot) {
         try {
-            foreach (string directory in new[] { "Assets", "Packages", "ProjectSettings" }) {
-                string path = Path.Combine(projectRoot, directory);
-                if (!Directory.Exists(path)) {
-                    throw new InvalidOperationException($"Required Unity project directory is missing: {directory}");
-                }
-            }
-
-            string versionPath = Path.Combine(projectRoot, "ProjectSettings", "ProjectVersion.txt");
-            if (!File.Exists(versionPath)) {
-                throw new InvalidOperationException("Required Unity version file is missing: ProjectSettings/ProjectVersion.txt");
-            }
-
-            string manifestPath = Path.Combine(projectRoot, "Packages", "manifest.json");
-            if (!File.Exists(manifestPath)) {
-                throw new InvalidOperationException("Required package manifest is missing: Packages/manifest.json");
-            }
-
-            string settingsPath = Path.Combine(projectRoot, "ProjectSettings", "ProjectSettings.asset");
-            if (!File.Exists(settingsPath)) {
-                throw new InvalidOperationException("Required player settings file is missing: ProjectSettings/ProjectSettings.asset");
-            }
-
-            string[] versionLines = File.ReadAllLines(versionPath);
-            string editorVersion = ReadValue(versionLines, "m_EditorVersion:")
-                                   ?? throw new InvalidOperationException("ProjectSettings/ProjectVersion.txt does not contain m_EditorVersion");
-            string? editorVersionWithRevision = ReadValue(versionLines, "m_EditorVersionWithRevision:");
-            var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))
-                           ?? throw new InvalidOperationException("Packages/manifest.json is empty");
-            string[] settings = File.ReadAllLines(settingsPath);
-
-            Console.WriteLine(JsonSerializer.Serialize(new ProjectProbeResult {
-                companyName = ReadRequiredSetting(settings, "companyName"),
-                projectName = ReadRequiredSetting(settings, "productName"),
-                projectVersion = ReadRequiredSetting(settings, "bundleVersion"),
-                editorVersion = editorVersion,
-                editorRevision = ReadRevision(editorVersionWithRevision),
-                apiCompatibility = ApiCompatibility(
-                    ReadRequiredIntegerSetting(settings, "apiCompatibilityLevel"),
-                    editorVersion),
-                allowUnsafeCode = ReadRequiredIntegerSetting(settings, "allowUnsafeCode") != 0,
-                scriptingBackendOverrides = ReadEnumMap(settings, "scriptingBackend", ScriptingBackend),
-                renderPipeline = RenderPipeline(projectRoot, manifest),
-                colorSpace = ColorSpace(ReadRequiredIntegerSetting(settings, "m_ActiveColorSpace")),
-                graphicsApis = ReadGraphicsApis(settings),
-                inputHandling = InputHandling(ReadRequiredIntegerSetting(settings, "activeInputHandler")),
-                packages = manifest
-            }, JsonOptions));
+            Console.WriteLine(JsonSerializer.Serialize(Read(projectRoot), JsonOptions));
             return 0;
         } catch (Exception exception) {
             Console.Error.WriteLine($"compose-unity-sidecar: {exception.Message}");
             return 1;
         }
+    }
+
+    internal static ProjectProbeResult Read(string projectRoot) {
+        foreach (string directory in new[] { "Assets", "Packages", "ProjectSettings" }) {
+            string path = Path.Combine(projectRoot, directory);
+            if (!Directory.Exists(path)) {
+                throw new InvalidOperationException($"Required Unity project directory is missing: {directory}");
+            }
+        }
+
+        string versionPath = Path.Combine(projectRoot, "ProjectSettings", "ProjectVersion.txt");
+        if (!File.Exists(versionPath)) {
+            throw new InvalidOperationException("Required Unity version file is missing: ProjectSettings/ProjectVersion.txt");
+        }
+
+        string manifestPath = Path.Combine(projectRoot, "Packages", "manifest.json");
+        if (!File.Exists(manifestPath)) {
+            throw new InvalidOperationException("Required package manifest is missing: Packages/manifest.json");
+        }
+
+        string settingsPath = Path.Combine(projectRoot, "ProjectSettings", "ProjectSettings.asset");
+        if (!File.Exists(settingsPath)) {
+            throw new InvalidOperationException("Required player settings file is missing: ProjectSettings/ProjectSettings.asset");
+        }
+
+        string[] versionLines = File.ReadAllLines(versionPath);
+        string editorVersion = ReadValue(versionLines, "m_EditorVersion:")
+                               ?? throw new InvalidOperationException("ProjectSettings/ProjectVersion.txt does not contain m_EditorVersion");
+        string? editorVersionWithRevision = ReadValue(versionLines, "m_EditorVersionWithRevision:");
+        var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))
+                       ?? throw new InvalidOperationException("Packages/manifest.json is empty");
+        string[] settings = File.ReadAllLines(settingsPath);
+
+        return new ProjectProbeResult {
+            companyName = ReadRequiredSetting(settings, "companyName"),
+            projectName = ReadRequiredSetting(settings, "productName"),
+            projectVersion = ReadRequiredSetting(settings, "bundleVersion"),
+            editorVersion = editorVersion,
+            editorRevision = ReadRevision(editorVersionWithRevision),
+            apiCompatibility = ApiCompatibility(
+                ReadRequiredIntegerSetting(settings, "apiCompatibilityLevel"),
+                editorVersion),
+            allowUnsafeCode = ReadRequiredIntegerSetting(settings, "allowUnsafeCode") != 0,
+            scriptingBackendOverrides = ReadEnumMap(settings, "scriptingBackend", ScriptingBackend),
+            renderPipeline = RenderPipeline(projectRoot, manifest),
+            colorSpace = ColorSpace(ReadRequiredIntegerSetting(settings, "m_ActiveColorSpace")),
+            graphicsApis = ReadGraphicsApis(settings),
+            inputHandling = InputHandling(ReadRequiredIntegerSetting(settings, "activeInputHandler")),
+            packages = manifest
+        };
     }
 
     static string ReadRequiredSetting(IReadOnlyList<string> lines, string name) =>
