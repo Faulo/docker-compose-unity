@@ -99,7 +99,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             .Select(tool => tool!["name"]!.GetValue<string>())
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.That(names, Is.EqualTo(new[] { "execute_method", "get_project_info", "run_tests" }));
+        Assert.That(names, Is.EqualTo(new[] { "build_and_serve_webgl", "execute_method", "get_project_info", "run_tests" }));
+        var webGlTool = tools["result"]!["tools"]!.AsArray().Single(tool => tool!["name"]!.GetValue<string>() == "build_and_serve_webgl")!;
+        Assert.That(webGlTool["inputSchema"]!["properties"]!.AsObject().Select(property => property.Key), Is.EqualTo(new[] { "projectRoot" }));
 
         var response = await CallToolAsync("get_project_info", new JsonObject { ["projectRoot"] = project });
         Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
@@ -167,6 +169,47 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             Assert.That(result["outcome"]!.GetValue<string>(), Is.EqualTo("passed"));
             Assert.That(result["counts"]!["total"]!.GetValue<int>(), Is.EqualTo(2));
             Assert.That(result["counts"]!["passed"]!.GetValue<int>(), Is.EqualTo(2));
+        }
+    }
+
+    [Test]
+    public async Task BuildsAndServesUnityWebGlContent() {
+        var response = await CallToolAsync("build_and_serve_webgl", new JsonObject { ["projectRoot"] = project });
+        Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
+        var result = ToolResult(response);
+        string buildId = result["buildId"]!.GetValue<string>();
+        string url = result["url"]!.GetValue<string>();
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result["projectSlug"]!.GetValue<string>(), Is.EqualTo("example-game"));
+            Assert.That(buildId, Does.Match(@"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}Z$"));
+            Assert.That(result["path"]!.GetValue<string>(), Is.EqualTo($"/webgl/example-game/{buildId}/"));
+            Assert.That(url, Does.StartWith(endpoint!.GetLeftPart(UriPartial.Authority) + "/webgl/example-game/"));
+        }
+
+        using var root = await httpClient!.GetAsync(new Uri(endpoint, "/webgl/"));
+        string rootListing = await root.Content.ReadAsStringAsync();
+        using var projectListingResponse = await httpClient.GetAsync(new Uri(endpoint, "/webgl/example-game/"));
+        string projectListing = await projectListingResponse.Content.ReadAsStringAsync();
+        using var index = await httpClient.GetAsync(url);
+        string indexContent = await index.Content.ReadAsStringAsync();
+        using var encodedRequest = new HttpRequestMessage(HttpMethod.Head, url + "Build/game.wasm.br");
+        using var encoded = await httpClient.SendAsync(encodedRequest);
+        using var rangeRequest = new HttpRequestMessage(HttpMethod.Get, url + "Build/game.data");
+        rangeRequest.Headers.Range = new RangeHeaderValue(2, 5);
+        using var range = await httpClient.SendAsync(rangeRequest);
+        string rangeContent = await range.Content.ReadAsStringAsync();
+
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(rootListing, Does.Contain("example-game"));
+            Assert.That(projectListing, Does.Contain(buildId));
+            Assert.That(indexContent, Does.Contain("Daemon WebGL Build"));
+            Assert.That(index.Headers.GetValues("Cross-Origin-Opener-Policy"), Does.Contain("same-origin"));
+            Assert.That(index.Headers.GetValues("Cross-Origin-Embedder-Policy"), Does.Contain("require-corp"));
+            Assert.That(index.Headers.GetValues("Cross-Origin-Resource-Policy"), Does.Contain("cross-origin"));
+            Assert.That(encoded.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/wasm"));
+            Assert.That(encoded.Content.Headers.ContentEncoding, Does.Contain("br"));
+            Assert.That(range.StatusCode, Is.EqualTo(System.Net.HttpStatusCode.PartialContent));
+            Assert.That(rangeContent, Is.EqualTo("2345"));
         }
     }
 

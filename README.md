@@ -374,9 +374,9 @@ url = "http://127.0.0.1:1234/mcp"
 tool_timeout_sec = 1800
 ```
 
-The server advertises exactly three tools:
+The server advertises exactly four tools:
 
-- `project_info` validates a Docker-host project path and returns its normalized
+- `get_project_info` validates a Docker-host project path and returns its normalized
   root, company, product and editor versions, major code and rendering settings,
   input handling, and complete package manifest by reading the project's YAML
   and JSON files directly. It never installs or launches Unity. Unity defaults
@@ -394,6 +394,12 @@ The server advertises exactly three tools:
   Stream transitions are marked `[stdout]` and `[stderr]`.
 - `execute_method` runs a fully qualified static editor method with
   argument boundaries preserved and asks Unity to quit after it returns.
+- `build_and_serve_webgl` installs the selected editor's WebGL Build Support
+  module, invokes
+  `Slothsoft.UnityExtensions.Editor.Build.WebGL`, copies the successful build
+  from the retained worker through the Docker Engine archive API, and returns a
+  browser-ready URL on the MCP listener. The project must provide
+  `net.slothsoft.unity-extensions`; the tool does not change package state.
 
 Pass `projectRoot` as a path understood by the Docker daemon. Docker Desktop
 users can pass a natural Windows host path such as
@@ -423,6 +429,60 @@ revisions. Sidecar shutdown stops accepting MCP calls and gracefully stops any
 worker currently executing one, which invokes the existing Unity process-tree
 shutdown policy while retaining the worker container and its imported
 `Library` for restart.
+
+### WebGL document root
+
+The MCP listener exposes an htdocs-style tree at `/webgl/`. Project directories
+use a readable slug derived from Unity's product name and contain builds named
+with UTC timestamps such as `2026-08-14_18-42-07Z`. Directory browsing is
+enabled, while an `index.html` file takes priority as the directory index. A
+build URL therefore has this form:
+
+```text
+http://127.0.0.1:1234/webgl/example-game/2026-08-14_18-42-07Z/
+```
+
+The sidecar document-root paths are:
+
+- Linux: `/var/lib/compose-unity/webgl`
+- Windows: `C:\ProgramData\compose-unity\webgl`
+
+Without a mount, builds live in the sidecar's writable container layer and
+disappear with that container. Mount the directory as tmpfs for explicitly
+temporary storage. This Linux Compose fragment keeps WebGL output in memory:
+
+```yaml
+services:
+  unity:
+    tmpfs:
+      - /var/lib/compose-unity/webgl
+```
+
+Use a named volume when builds should survive sidecar replacement:
+
+```yaml
+services:
+  unity:
+    volumes:
+      - unity-webgl:/var/lib/compose-unity/webgl
+
+volumes:
+  unity-webgl:
+```
+
+The equivalent Windows volume target is
+`C:\ProgramData\compose-unity\webgl`. A bind mount may be used instead when the
+host should manage or inspect the files directly. The sidecar performs no
+retention or pruning and serves whatever is already present after startup.
+Interrupted transfers can leave visible partial timestamp directories; their
+unreturned URLs are never reused.
+
+The server supports Unity's uncompressed, gzip, Brotli, decompression-fallback,
+and WebAssembly files with their required MIME types and content encodings. It
+also supports streaming, conditional and range requests. Every `/webgl`
+response supplies `Cross-Origin-Opener-Policy`,
+`Cross-Origin-Embedder-Policy`, and `Cross-Origin-Resource-Policy` so threaded
+Unity builds can use `SharedArrayBuffer` on the loopback origin.
 
 MCP startup is included in sidecar readiness, `status`, and Docker health when
 enabled. Startup fails if Docker Engine access or self-container inspection is

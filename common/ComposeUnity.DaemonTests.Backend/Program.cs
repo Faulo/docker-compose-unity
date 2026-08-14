@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security;
+using System.Text;
 using System.Text.Json;
 
 if (args.Contains("--version", StringComparer.Ordinal)) {
@@ -19,10 +20,20 @@ if (separator < 0 || separator + 1 >= args.Length) {
 
 string[] command = args[(separator + 1)..];
 return command[0] switch {
+    "module-install" => installModules(command),
     "method" => executeMethod(command),
     "tests" => runTests(command),
     _ => unexpected(command)
 };
+
+static int installModules(string[] command) {
+    if (command.Length != 3 || command[2] != "webgl") {
+        Console.Error.WriteLine($"Invalid module-install command: {JsonSerializer.Serialize(command)}");
+        return 2;
+    }
+
+    return 0;
+}
 
 static int runControllerProbe(string root) {
     string executable = Path.Combine(AppContext.BaseDirectory,
@@ -43,9 +54,25 @@ static int executeMethod(string[] command) {
     }
 
     int arguments = Array.IndexOf(command, "--");
+    string[] values = arguments < 0 ? [] : command[(arguments + 1)..];
+    if (command[2] == "Slothsoft.UnityExtensions.Editor.Build.WebGL") {
+        if (values.Length != 1) {
+            Console.Error.WriteLine("The WebGL build requires exactly one output path.");
+            return 2;
+        }
+
+        string output = values[0];
+        Directory.CreateDirectory(Path.Combine(output, "Build"));
+        File.WriteAllText(Path.Combine(output, "index.html"), "<!doctype html><title>Daemon WebGL Build</title><h1>Ready</h1>");
+        File.WriteAllBytes(Path.Combine(output, "Build", "game.data"), Encoding.ASCII.GetBytes("0123456789"));
+        File.WriteAllBytes(Path.Combine(output, "Build", "game.wasm.br"), [1, 2, 3, 4]);
+        File.WriteAllText(Path.Combine(output, "Build", "game.js.gz"), "compressed javascript fixture");
+        return 0;
+    }
+
     Console.WriteLine(JsonSerializer.Serialize(new {
         method = command[2],
-        arguments = arguments < 0 ? Array.Empty<string>() : command[(arguments + 1)..]
+        arguments = values
     }));
     Console.Error.WriteLine("daemon-test stderr");
     return 7;

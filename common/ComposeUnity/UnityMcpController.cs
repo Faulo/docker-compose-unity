@@ -93,6 +93,10 @@ sealed class UnityMcpController : IAsyncDisposable {
         get => windowsContainers ? "compose-unity.exe" : "compose-unity";
     }
 
+    string WorkerWebGlRoot {
+        get => windowsContainers ? @"C:\Windows\Temp\compose-unity-webgl" : "/tmp/compose-unity-webgl";
+    }
+
     public async ValueTask DisposeAsync() {
         await StopActiveWorkersAsync();
         await docker.DisposeAsync();
@@ -225,6 +229,58 @@ sealed class UnityMcpController : IAsyncDisposable {
         }, cancellationToken);
     }
 
+    internal async Task<object> BuildAndServeWebGlAsync(
+        string projectRoot,
+        string scheme,
+        string host,
+        CancellationToken cancellationToken) {
+        if (scheme is not "http" and not "https" || string.IsNullOrWhiteSpace(host)) {
+            throw new InvalidOperationException("The MCP request did not provide a valid public HTTP origin.");
+        }
+
+        var project = await GetProjectAsync(projectRoot, cancellationToken);
+        return await ExecuteSerializedAsync(project, "build_and_serve_webgl", async (worker, token) => {
+            var moduleResult = await ExecuteWorkerAsync(worker, [
+                ComposeExecutable,
+                "exec",
+                "unity-command",
+                "--",
+                "module-install",
+                WorkerProjectRoot,
+                "webgl"
+            ], token);
+            EnsureSuccessful(moduleResult, "Unity WebGL Build Support installation");
+
+            string workerOutput = CombineContainerPath(WorkerWebGlRoot, Guid.NewGuid().ToString("N"), windowsContainers);
+            try {
+                var buildResult = await ExecuteWorkerAsync(worker, [
+                    ComposeExecutable,
+                    "exec",
+                    "unity-command",
+                    "--",
+                    "method",
+                    WorkerProjectRoot,
+                    "Slothsoft.UnityExtensions.Editor.Build.WebGL",
+                    "--",
+                    workerOutput
+                ], token);
+                EnsureSuccessful(buildResult, "Unity WebGL build");
+
+                string projectSlug = WebGlHosting.ProjectSlug(project.probe.projectName);
+                var build = await WebGlHosting.ClaimBuildDirectoryAsync(WebGlHosting.documentRoot, projectSlug, token);
+                await docker.ExtractArchiveAsync(
+                    worker.id,
+                    CombineContainerPath(workerOutput, ".", windowsContainers),
+                    build.directory,
+                    token);
+                string path = WebGlHosting.PublicPath(build);
+                return new { build.projectSlug, build.buildId, path, url = $"{scheme}://{host}{path}" };
+            } finally {
+                await RemoveWorkerDirectoryBestEffortAsync(worker, workerOutput);
+            }
+        }, cancellationToken);
+    }
+
     internal async Task StopActiveWorkersAsync() {
         foreach (string worker in activeWorkers.Keys) {
             try {
@@ -267,6 +323,32 @@ sealed class UnityMcpController : IAsyncDisposable {
         } finally {
             activeWorkers.TryRemove(worker.id, out _);
         }
+    }
+
+    async Task RemoveWorkerDirectoryBestEffortAsync(WorkerContainer worker, string path) {
+        IReadOnlyList<string> command = windowsContainers
+            ? ["cmd.exe", "/d", "/s", "/c", $"rmdir /s /q \"{path}\""]
+            : ["rm", "-rf", "--", path];
+        try {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var result = await docker.ExecAsync(worker.id, WorkerProjectRoot, command, timeout.Token);
+            if (result.exitCode != 0) {
+                Console.Error.WriteLine($"compose-unity-sidecar: failed to remove temporary WebGL output from worker {worker.name}");
+            }
+        } catch (Exception exception) {
+            Console.Error.WriteLine($"compose-unity-sidecar: failed to remove temporary WebGL output from worker {worker.name}: {exception.Message}");
+        }
+    }
+
+    static void EnsureSuccessful(ExecResult result, string operation) {
+        if (result.exitCode == 0) {
+            return;
+        }
+
+        string detail = RelevantOutput(result.combinedOutput);
+        throw new InvalidOperationException(string.IsNullOrWhiteSpace(detail)
+            ? $"{operation} failed with exit code {result.exitCode}."
+            : $"{operation} failed with exit code {result.exitCode}: {detail}");
     }
 
     async Task<ValidatedProject> GetProjectAsync(string projectRoot, CancellationToken cancellationToken) {

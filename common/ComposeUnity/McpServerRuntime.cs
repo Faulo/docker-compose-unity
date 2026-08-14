@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
@@ -68,6 +69,8 @@ sealed class McpServerRuntime : IAsyncDisposable {
             builder.WebHost.UseUrls("http://0.0.0.0:8080");
             builder.Configuration["AllowedHosts"] = "localhost;127.0.0.1;[::1]";
             builder.Services.AddSingleton(controller);
+            builder.Services.AddHttpContextAccessor();
+            builder.Services.AddDirectoryBrowser();
             builder.Services.AddMcpServer()
                 .WithHttpTransport(options => options.Stateless = true)
                 .WithTools<UnityMcpTools>();
@@ -83,6 +86,25 @@ sealed class McpServerRuntime : IAsyncDisposable {
                 }
 
                 await next(context);
+            });
+            Directory.CreateDirectory(WebGlHosting.documentRoot);
+            application.UseWhen(
+                context => context.Request.Path.StartsWithSegments("/webgl"),
+                webGl => webGl.Use(async (context, next) => {
+                    WebGlHosting.ApplyUnityHeaders(context);
+                    await next(context);
+                }));
+            application.UseFileServer(new FileServerOptions {
+                FileProvider = new PhysicalFileProvider(WebGlHosting.documentRoot),
+                RequestPath = "/webgl",
+                EnableDefaultFiles = true,
+                EnableDirectoryBrowsing = true,
+                StaticFileOptions = {
+                    ContentTypeProvider = new UnityWebContentTypeProvider(),
+                    ServeUnknownFileTypes = true,
+                    DefaultContentType = "application/octet-stream",
+                    OnPrepareResponse = WebGlHosting.PrepareStaticResponse
+                }
             });
             application.MapMcp("/mcp");
 
@@ -142,7 +164,7 @@ sealed class McpServerRuntime : IAsyncDisposable {
 }
 
 [McpServerToolType]
-sealed class UnityMcpTools(UnityMcpController controller) {
+sealed class UnityMcpTools(UnityMcpController controller, IHttpContextAccessor contexts) {
     [McpServerTool(
         Name = "get_project_info",
         ReadOnly = true,
@@ -192,6 +214,27 @@ sealed class UnityMcpTools(UnityMcpController controller) {
         [Description("Optional arguments forwarded without shell reinterpretation.")]
         string[]? arguments = null) =>
         await InvokeAsync(() => controller.ExecuteMethodAsync(projectRoot, method, arguments, cancellationToken));
+
+    [McpServerTool(
+        Name = "build_and_serve_webgl",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false,
+        OpenWorld = false,
+        UseStructuredContent = true)]
+    [Description("Build a Docker-host Unity project for WebGL and serve the immutable result from this MCP listener.")]
+    public async Task<object> BuildAndServeWebGlAsync(
+        [Description("Docker-daemon host path to an existing Unity project.")]
+        string projectRoot,
+        CancellationToken cancellationToken) {
+        var request = contexts.HttpContext?.Request
+                      ?? throw new McpException("The WebGL build tool requires an HTTP request context.");
+        return await InvokeAsync(() => controller.BuildAndServeWebGlAsync(
+            projectRoot,
+            request.Scheme,
+            request.Host.Value ?? string.Empty,
+            cancellationToken));
+    }
 
     static async Task<object> InvokeAsync(Func<Task<object>> action) {
         try {

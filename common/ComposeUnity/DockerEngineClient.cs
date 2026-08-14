@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Formats.Tar;
 using System.IO.Pipes;
 using System.Net;
 using System.Net.Sockets;
@@ -163,6 +164,20 @@ sealed class DockerEngineClient : IAsyncDisposable {
             output.standardOutput,
             output.standardError,
             output.combinedOutput);
+    }
+
+    internal async Task ExtractArchiveAsync(
+        string container,
+        string path,
+        string destination,
+        CancellationToken cancellationToken) {
+        using var response = await client.GetAsync(
+            $"/containers/{Escape(container)}/archive?path={Uri.EscapeDataString(path)}",
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await TarFile.ExtractToDirectoryAsync(stream, destination, false, cancellationToken);
     }
 
     async Task<JsonObject> GetObjectAsync(string path, CancellationToken cancellationToken) {

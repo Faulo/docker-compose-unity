@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.Formats.Tar;
 using System.IO.Pipes;
 using System.Net;
 using System.Net.Sockets;
@@ -116,6 +117,32 @@ public sealed class DockerEngineClientTests {
             Assert.That(output.standardError, Is.EqualTo("error"));
             Assert.That(output.combinedOutput, Is.EqualTo("[stdout]\nout\n[stderr]\nerror\n[stdout]\ndone"));
         });
+    }
+
+    [Test]
+    public async Task StreamsAndExtractsContainerArchive() {
+        using var archive = new MemoryStream();
+        using (var writer = new TarWriter(archive, leaveOpen: true)) {
+            var entry = new PaxTarEntry(TarEntryType.RegularFile, "index.html") {
+                DataStream = new MemoryStream(Encoding.UTF8.GetBytes("webgl fixture"))
+            };
+            writer.WriteEntry(entry);
+        }
+        byte[] bytes = archive.ToArray();
+        await using var engine = new FakeDockerEngine((request, _) => Task.FromResult(
+            request.path == "/containers/worker/archive?path=%2Ftmp%2Fbuild%2F."
+                ? FakeDockerResponse.Bytes(bytes)
+                : FakeDockerResponse.NotFound()));
+        await using var client = engine.CreateClient();
+        string destination = Path.Combine(Path.GetTempPath(), "compose-unity-archive-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(destination);
+        try {
+            await client.ExtractArchiveAsync("worker", "/tmp/build/.", destination, CancellationToken.None);
+
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(destination, "index.html")), Is.EqualTo("webgl fixture"));
+        } finally {
+            Directory.Delete(destination, true);
+        }
     }
 
     [Test]
