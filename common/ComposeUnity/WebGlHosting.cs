@@ -7,8 +7,8 @@ namespace ComposeUnity;
 
 static class WebGlHosting {
     internal static string documentRoot => OperatingSystem.IsWindows()
-        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "compose-unity", "webgl")
-        : "/var/lib/compose-unity/webgl";
+        ? @"C:\compose-unity\webgl"
+        : "/compose-unity/webgl";
 
     internal static string ProjectSlug(string? projectName) {
         var result = new StringBuilder();

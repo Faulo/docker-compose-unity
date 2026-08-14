@@ -36,6 +36,16 @@ public sealed class CommandAndConfigurationTests {
         Assert.That(command.arguments, Is.SameAs(arguments));
     }
 
+    [Test]
+    public void UsesToolInstallationDirectoryForComposer() {
+        var startInfo = Program.ComposerStartInfo(["--version"]);
+        string[] arguments = startInfo.ArgumentList.ToArray();
+
+        Assert.That(arguments, Does.Contain(OperatingSystem.IsWindows()
+            ? @"C:\compose-unity"
+            : "/compose-unity"));
+    }
+
     [TestCase(null, false, false)]
     [TestCase("0", false, false)]
     [TestCase("1", true, false)]

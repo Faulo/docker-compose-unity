@@ -5,7 +5,7 @@ ARG OS_BASE
 
 SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell", "-ExecutionPolicy", "Bypass", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
-WORKDIR C:/unity
+WORKDIR C:/compose-unity
 
 # The selectable full Windows base supplies the desktop WinRT classes required
 # by Unity. Shell compatibility artifacts below are validated per OS family.
@@ -111,9 +111,9 @@ RUN $package = 'C:\net471-reference-assemblies.nupkg'; \
 
 # Use the supported Visual Studio 2019 servicing baseline because Visual Studio
 # 2022 MSBuild is incompatible with the .NET Framework build host used here.
-COPY windows/WindowsBase C:/unity/WindowsBase
-RUN & 'C:\unity\WindowsBase\install.ps1'; \
-    Remove-Item -LiteralPath C:\unity\WindowsBase -Recurse -Force
+COPY windows/WindowsBase C:/compose-unity/WindowsBase
+RUN & 'C:\compose-unity\WindowsBase\install.ps1'; \
+    Remove-Item -LiteralPath C:\compose-unity\WindowsBase -Recurse -Force
 
 # Unity publishes the 3.12.1 installer under its 3.12.0 archive path. Its NSIS
 # process can hang in a container, so fall back to its verified app archive.
@@ -163,10 +163,10 @@ RUN $installer = 'C:\UnityHubSetup.exe'; \
 
 # Resume large Editor downloads after temporary CDN stalls and launch the
 # installer helper directly because Windows containers cannot display UAC.
-COPY windows/patch-unity-hub.js C:/unity/patch-unity-hub.js
-RUN node C:\unity\patch-unity-hub.js; \
+COPY windows/patch-unity-hub.js C:/compose-unity/patch-unity-hub.js
+RUN node C:\compose-unity\patch-unity-hub.js; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to patch Unity Hub for Windows containers' }; \
-    Remove-Item -Force C:\unity\patch-unity-hub.js
+    Remove-Item -Force C:\compose-unity\patch-unity-hub.js
 
 COPY windows/php-extensions.ini C:/tools/php82/compose-unity-extensions.ini
 RUN Get-Content C:/tools/php82/compose-unity-extensions.ini | Add-Content -Path C:/tools/php82/php.ini
@@ -199,16 +199,16 @@ RUN $blenderDirectory = 'C:\Program Files\Blender Foundation\Blender ' + $env:BL
 # reliably resolve associations on mounted paths or launch executables without
 # Explorer. Preserve every original export through a proxy and replace only
 # FindExecutableW and ShellExecuteExW with container-safe implementations.
-COPY windows/Shell32Proxy C:/unity/Shell32Proxy
-RUN & 'C:\unity\Shell32Proxy\install.ps1'
+COPY windows/Shell32Proxy C:/compose-unity/Shell32Proxy
+RUN & 'C:\compose-unity\Shell32Proxy\install.ps1'
 
 # Run both architectures in a fresh layer so KnownDLL resolution loads the
 # proxies rather than the original DLLs mapped by the replacement layer.
-RUN & 'C:\unity\Shell32Proxy\shell32-proxy-test-x64.exe'; \
+RUN & 'C:\compose-unity\Shell32Proxy\shell32-proxy-test-x64.exe'; \
     if ($LASTEXITCODE -ne 0) { throw ('64-bit SHELL32 proxy test failed with exit code {0}' -f $LASTEXITCODE) }; \
-    & 'C:\unity\Shell32Proxy\shell32-proxy-test-x86.exe'; \
+    & 'C:\compose-unity\Shell32Proxy\shell32-proxy-test-x86.exe'; \
     if ($LASTEXITCODE -ne 0) { throw ('32-bit SHELL32 proxy test failed with exit code {0}' -f $LASTEXITCODE) }; \
-    Remove-Item -LiteralPath C:\unity\Shell32Proxy -Recurse -Force
+    Remove-Item -LiteralPath C:\compose-unity\Shell32Proxy -Recurse -Force
 
 # Test
 RUN git config --global --add safe.directory *; \
@@ -231,7 +231,7 @@ RUN git config --global --add safe.directory *; \
     if ($LASTEXITCODE -ne 0) { throw '.NET smoke check failed' }
 
 # Farah
-ENV COMPOSE_UNITY="composer -d C:/unity"
+ENV COMPOSE_UNITY="composer -d C:/compose-unity"
 ENV COMPOSER_ALLOW_SUPERUSER="1"
 
 ENV UNITY_LOGGING="stdin stdout stderr"
@@ -240,15 +240,15 @@ ENV UNITY_NO_GRAPHICS="1"
 
 # Windows containers cannot start Electron's sandboxed GPU process. Keep Unity's
 # documented CLI syntax externally and translate it before launching Hub.
-COPY ["windows/Unity Hub.cs", "C:/unity/Unity Hub.cs"]
-COPY ["windows/SteamCmd.cs", "C:/unity/SteamCmd.cs"]
-COPY common/ComposeUnity C:/unity/compose-unity
-RUN $project = 'C:\unity\launcher.csproj'; \
-    $hubSource = 'C:\unity\Unity Hub.cs'; \
-    $steamCmdSource = 'C:\unity\SteamCmd.cs'; \
-    $hubPublish = 'C:\unity\publish-hub'; \
-    $steamCmdPublish = 'C:\unity\publish-steamcmd'; \
-    $composePublish = 'C:\unity\publish-compose'; \
+COPY ["windows/Unity Hub.cs", "C:/compose-unity/Unity Hub.cs"]
+COPY ["windows/SteamCmd.cs", "C:/compose-unity/SteamCmd.cs"]
+COPY common/ComposeUnity C:/compose-unity/compose-unity
+RUN $project = 'C:\compose-unity\launcher.csproj'; \
+    $hubSource = 'C:\compose-unity\Unity Hub.cs'; \
+    $steamCmdSource = 'C:\compose-unity\SteamCmd.cs'; \
+    $hubPublish = 'C:\compose-unity\publish-hub'; \
+    $steamCmdPublish = 'C:\compose-unity\publish-steamcmd'; \
+    $composePublish = 'C:\compose-unity\publish-compose'; \
     Set-Content -LiteralPath $project -Encoding UTF8 -Value @( \
         '<Project Sdk=''Microsoft.NET.Sdk''>', \
         '  <PropertyGroup>', \
@@ -269,7 +269,7 @@ RUN $project = 'C:\unity\launcher.csproj'; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the Unity Hub launcher' }; \
     dotnet publish $project --nologo --configuration Release --output $steamCmdPublish "-p:LauncherSource=$steamCmdSource" -p:AssemblyName=steamcmd; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the SteamCMD launcher' }; \
-    dotnet publish C:\unity\compose-unity\ComposeUnity.csproj --nologo --configuration Release --output $composePublish ('-p:ComposeUnityTargetFramework=net' + $env:DOTNET_VERSION) -p:RuntimeIdentifier=win-x64; \
+    dotnet publish C:\compose-unity\compose-unity\ComposeUnity.csproj --nologo --configuration Release --output $composePublish ('-p:ComposeUnityTargetFramework=net' + $env:DOTNET_VERSION) -p:RuntimeIdentifier=win-x64; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the compose-unity launcher' }; \
     $hubArtifacts = @(Get-ChildItem -LiteralPath $hubPublish -File); \
     if ($hubArtifacts.Count -ne 1 -or $hubArtifacts[0].Name -ne 'unity-hub-launcher.exe') { throw 'Unity Hub launcher publish did not produce exactly one executable' }; \
@@ -285,7 +285,7 @@ RUN $project = 'C:\unity\launcher.csproj'; \
     Copy-Item -LiteralPath $composeArtifacts[0].FullName -Destination C:\Windows\compose-unity.exe; \
     New-Item -ItemType HardLink -Path C:\Windows\compose-unity-sidecar.exe -Target C:\Windows\compose-unity.exe | Out-Null; \
     Remove-Item -LiteralPath $project, $hubSource, $steamCmdSource -Force; \
-    Remove-Item -LiteralPath C:\unity\bin, C:\unity\obj, C:\unity\compose-unity, $hubPublish, $steamCmdPublish, $composePublish -Recurse -Force
+    Remove-Item -LiteralPath C:\compose-unity\bin, C:\compose-unity\obj, C:\compose-unity\compose-unity, $hubPublish, $steamCmdPublish, $composePublish -Recurse -Force
 
 ARG STEAMCMD_SHA256=7669B170DEE42DB8EE2273775ED7DFB2D173BDBA1B849F70D2C7B379290BCE13
 RUN $archive = 'C:\steamcmd.zip'; \

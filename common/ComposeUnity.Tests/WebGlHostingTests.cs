@@ -1,6 +1,13 @@
 namespace ComposeUnity.Tests;
 
 public sealed class WebGlHostingTests {
+    [Test]
+    public void UsesToolInstallationDirectoryAsDocumentRoot() {
+        Assert.That(WebGlHosting.documentRoot, Is.EqualTo(OperatingSystem.IsWindows()
+            ? @"C:\compose-unity\webgl"
+            : "/compose-unity/webgl"));
+    }
+
     [TestCase("Example Game", "example-game")]
     [TestCase("  A/B:C  ", "a-b-c")]
     [TestCase("___", "project")]

@@ -190,7 +190,7 @@ RUN echo "deb https://security.debian.org/debian-security bullseye-security main
     rm -rf /var/lib/apt/lists/*
 
 # Farah
-ENV COMPOSE_UNITY="composer -d /var/unity"
+ENV COMPOSE_UNITY="composer -d /compose-unity"
 ENV COMPOSER_ALLOW_SUPERUSER="1"
 
 ENV UNITY_LOGGING="stdin stdout stderr"
@@ -221,7 +221,7 @@ ENV COMPOSE_UNITY_MCP="0"
 
 ARG UNITY_TIMEOUT="14400"
 ARG SLOTHSOFT_UNITY_VERSION=2.21
-RUN install -m 0755 -d /var/unity && \
+RUN install -m 0755 -d /compose-unity && \
     compose-unity require "slothsoft/unity:^${SLOTHSOFT_UNITY_VERSION}" && \
     compose-unity config process-timeout "$UNITY_TIMEOUT" && \
     compose-unity update --no-interaction --no-dev --optimize-autoloader --classmap-authoritative

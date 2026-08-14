@@ -372,11 +372,11 @@ static class Program {
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                 "ComposerSetup", "bin", "composer.phar"));
             startInfo.ArgumentList.Add("-d");
-            startInfo.ArgumentList.Add(@"C:\unity");
+            startInfo.ArgumentList.Add(@"C:\compose-unity");
         } else {
             startInfo = new ProcessStartInfo("composer");
             startInfo.ArgumentList.Add("-d");
-            startInfo.ArgumentList.Add("/var/unity");
+            startInfo.ArgumentList.Add("/compose-unity");
         }
 
         startInfo.WorkingDirectory = Environment.CurrentDirectory;

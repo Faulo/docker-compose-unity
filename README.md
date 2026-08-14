@@ -48,6 +48,10 @@ Build inputs are organized by ownership:
 
 Both Docker builds use the repository root as build context. Both images create their Composer project during the build, require `slothsoft/unity`, and configure the process timeout from `UNITY_TIMEOUT`.
 
+The compose-unity tool stack is installed at `/compose-unity` in the Linux
+image and `C:\compose-unity` in the Windows image. Runtime-owned subdirectories,
+including the WebGL document root, live beneath these locations.
+
 Both images default `SLOTHSOFT_UNITY_VERSION` to `2.21` and require the
 corresponding compatible Composer release range, `^2.21`. Override the build
 argument to select a different compatible minor release.
@@ -444,8 +448,8 @@ http://127.0.0.1:1234/webgl/example-game/2026-08-14_18-42-07Z/
 
 The sidecar document-root paths are:
 
-- Linux: `/var/lib/compose-unity/webgl`
-- Windows: `C:\ProgramData\compose-unity\webgl`
+- Linux: `/compose-unity/webgl`
+- Windows: `C:\compose-unity\webgl`
 
 Without a mount, builds live in the sidecar's writable container layer and
 disappear with that container. Mount the directory as tmpfs for explicitly
@@ -455,7 +459,7 @@ temporary storage. This Linux Compose fragment keeps WebGL output in memory:
 services:
   unity:
     tmpfs:
-      - /var/lib/compose-unity/webgl
+      - /compose-unity/webgl
 ```
 
 Use a named volume when builds should survive sidecar replacement:
@@ -464,15 +468,15 @@ Use a named volume when builds should survive sidecar replacement:
 services:
   unity:
     volumes:
-      - unity-webgl:/var/lib/compose-unity/webgl
+      - unity-webgl:/compose-unity/webgl
 
 volumes:
   unity-webgl:
 ```
 
-The equivalent Windows volume target is
-`C:\ProgramData\compose-unity\webgl`. A bind mount may be used instead when the
-host should manage or inspect the files directly. The sidecar performs no
+The equivalent Windows volume target is `C:\compose-unity\webgl`. A bind mount
+may be used instead when the host should manage or inspect the files directly.
+The sidecar performs no
 retention or pruning and serves whatever is already present after startup.
 Interrupted transfers can leave visible partial timestamp directories; their
 unreturned URLs are never reused.
