@@ -11,16 +11,16 @@ internal static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        var executable = Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? "compose-unity");
         try
         {
-            var executable = Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? string.Empty);
             return executable.Equals("compose-unity-sidecar", StringComparison.OrdinalIgnoreCase)
                 ? await RunSidecarCommandAsync(args)
                 : await RunComposeUnityAsync(args);
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine($"compose-unity: {exception.Message}");
+            Console.Error.WriteLine($"{executable}: {exception.Message}");
             return 1;
         }
     }
@@ -40,6 +40,11 @@ internal static class Program
         if (args.Length == 1 && args[0].Equals("health", StringComparison.OrdinalIgnoreCase))
         {
             return await CheckHealthAsync() ? 0 : 1;
+        }
+
+        if (args.Length == 2 && args[0].Equals("probe-project", StringComparison.Ordinal))
+        {
+            return ProjectProbe.Run(args[1]);
         }
 
         Console.Error.WriteLine("Usage: compose-unity-sidecar [status|health]");
@@ -146,6 +151,7 @@ internal static class Program
 
     private static async Task<int> RunSupervisorAsync()
     {
+        var mcpEnabled = McpActivation.Parse();
         var store = new StateStore();
         store.EnsureDirectories();
 
@@ -160,22 +166,39 @@ internal static class Program
             return 1;
         }
 
-        var ready = new ReadyRecord
-        {
-            Supervisor = ProcessIdentity.Current(),
-            StartedAtUtc = DateTimeOffset.UtcNow
-        };
-        store.WriteReady(ready);
-        Console.WriteLine($"READY os={RuntimeInformation.OSDescription.Replace(' ', '_')} compose-unity={await ComposerVersionAsync()}");
-
         using var cancellation = new CancellationTokenSource();
         using var signals = SignalHandlers.Register(cancellation);
+        McpServerRuntime? mcp = null;
         var lastReconciliation = DateTimeOffset.MinValue;
+        var exitCode = 0;
 
         try
         {
+            if (mcpEnabled)
+            {
+                mcp = await McpServerRuntime.StartAsync(cancellation.Token);
+            }
+
+            var ready = new ReadyRecord
+            {
+                Supervisor = ProcessIdentity.Current(),
+                StartedAtUtc = DateTimeOffset.UtcNow,
+                McpEnabled = mcpEnabled,
+                McpReady = mcp is not null
+            };
+            store.WriteReady(ready);
+            Console.WriteLine($"READY os={RuntimeInformation.OSDescription.Replace(' ', '_')} compose-unity={await ComposerVersionAsync()} mcp={(mcpEnabled ? "http://0.0.0.0:8080/mcp" : "disabled")}");
+
             while (!cancellation.IsCancellationRequested)
             {
+                if (mcp is not null && mcp.Completion.IsCompleted)
+                {
+                    Console.Error.WriteLine("compose-unity-sidecar: MCP server stopped unexpectedly");
+                    exitCode = 1;
+                    cancellation.Cancel();
+                    break;
+                }
+
                 store.DrainEvents(WriteLifecycleEvent);
                 if (DateTimeOffset.UtcNow - lastReconciliation >= TimeSpan.FromSeconds(2))
                 {
@@ -194,6 +217,11 @@ internal static class Program
         }
         finally
         {
+            if (mcp is not null)
+            {
+                await mcp.StopAsync();
+            }
+
             foreach (var record in store.ReadActive())
             {
                 if (record.RootProcess.IsAlive())
@@ -206,22 +234,30 @@ internal static class Program
 
             store.RemoveReady();
             store.DrainEvents(WriteLifecycleEvent);
+            if (mcp is not null)
+            {
+                await mcp.DisposeAsync();
+            }
         }
 
-        return 0;
+        return exitCode;
     }
 
     private static int PrintStatus()
     {
         var store = new StateStore();
         var ready = store.ReadReady();
-        var healthy = ready is not null && ready.Supervisor.IsAlive() && store.CanWrite();
+        var healthy = ready is not null
+            && ready.Supervisor.IsAlive()
+            && store.CanWrite()
+            && (!ready.McpEnabled || ready.McpReady);
         var active = store.ReadActive()
             .Where(record => record.Launcher.IsAlive() || record.RootProcess.IsAlive())
             .OrderBy(record => record.StartedAtUtc)
             .ToList();
 
         Console.WriteLine(healthy ? "healthy" : "unhealthy");
+        Console.WriteLine($"mcp: {(ready?.McpEnabled == true ? (ready.McpReady ? "ready" : "unready") : "disabled")}");
         Console.WriteLine($"active calls: {active.Count}");
         foreach (var record in active)
         {
@@ -242,7 +278,8 @@ internal static class Program
             return ready is not null
                 && ready.Supervisor.IsAlive()
                 && store.CanWrite()
-                && await ProbeComposerAsync();
+                && await ProbeComposerAsync()
+                && (!ready.McpEnabled || (ready.McpReady && await McpServerRuntime.CheckHealthAsync()));
         }
         catch
         {
@@ -577,6 +614,8 @@ internal sealed class ReadyRecord
 {
     public ProcessIdentity Supervisor { get; set; } = new();
     public DateTimeOffset StartedAtUtc { get; set; }
+    public bool McpEnabled { get; set; }
+    public bool McpReady { get; set; }
 }
 
 internal sealed class ProcessIdentity

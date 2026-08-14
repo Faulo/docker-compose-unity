@@ -287,6 +287,127 @@ An explicit command overrides the default sidecar command, preserving one-off us
 docker run --rm faulo/compose-unity:latest compose-unity exec unity-build ...
 ```
 
+## Optional MCP Server
+
+Set `COMPOSE_UNITY_MCP=1` to run the sidecar supervisor and an official ASP.NET
+Core Streamable HTTP MCP server together. The endpoint is fixed at `/mcp` on
+container port `8080`. An unset value or `0` keeps the existing sidecar-only
+behavior; every other value is a startup error.
+
+The MCP sidecar controls persistent Unity worker containers, so it must be able
+to access the same local Docker Engine that runs it. Publish the endpoint only
+on host loopback. A Linux Compose service can be configured as follows:
+
+```yaml
+services:
+  unity:
+    image: faulo/compose-unity:latest
+    environment:
+      COMPOSE_UNITY_MCP: "1"
+      UNITY_CREDENTIALS_USR:
+      UNITY_CREDENTIALS_PSW:
+      EMAIL_CREDENTIALS_USR:
+      EMAIL_CREDENTIALS_PSW:
+    ports:
+      - "127.0.0.1:1234:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - unity-binaries:/root/Unity
+      - unity-config:/root/.config/unity3d
+
+volumes:
+  unity-binaries:
+  unity-config:
+```
+
+The equivalent Windows container uses the Docker Engine named pipe and Windows
+Unity state paths:
+
+```yaml
+services:
+  unity:
+    image: faulo/compose-unity:latest
+    environment:
+      COMPOSE_UNITY_MCP: "1"
+      UNITY_CREDENTIALS_USR:
+      UNITY_CREDENTIALS_PSW:
+      EMAIL_CREDENTIALS_USR:
+      EMAIL_CREDENTIALS_PSW:
+    ports:
+      - "127.0.0.1:1234:8080"
+    volumes:
+      - type: npipe
+        source: '\\.\pipe\docker_engine'
+        target: '\\.\pipe\docker_engine'
+      - type: volume
+        source: unity-binaries
+        target: 'C:\Program Files\Unity\Hub\Editor'
+      - type: volume
+        source: unity-config
+        target: 'C:\Users\ContainerAdministrator\AppData\Roaming\Unity'
+
+volumes:
+  unity-binaries:
+  unity-config:
+```
+
+Configure Codex to connect over HTTP rather than launch a subprocess:
+
+```toml
+[mcp_servers.unity]
+url = "http://127.0.0.1:1234/mcp"
+tool_timeout_sec = 1800
+```
+
+The server advertises exactly three tools:
+
+- `project_info` validates a Docker-host project path and returns its normalized
+  root, company, product and editor versions, major code and rendering settings,
+  input handling, and complete package manifest by reading the project's YAML
+  and JSON files directly. It never installs or launches Unity. Unity defaults
+  that are absent from the serialized project remain explicit as empty override
+  maps rather than inferred values.
+- `run_tests` accepts one or more Unity test modes. A valid JUnit report returns
+  `outcome` (`passed` or `failed`), `exitCode`, total/passed/failure/error/skipped
+  counts, duration, and up to 100 failure details with complete stack traces.
+  `failuresTruncated` reports whether additional failures were omitted. Valid
+  reports omit Unity output. If Unity does not produce a trustworthy report,
+  the result contains `outcome: "error"`, `exitCode`, and `log`: the complete,
+  unfiltered, untruncated stdout/stderr transcript in Docker frame order.
+  Stream transitions are marked `[stdout]` and `[stderr]`.
+- `execute_method` runs a fully qualified static editor method with
+  argument boundaries preserved and asks Unity to quit after it returns.
+
+Pass `projectRoot` as a path understood by the Docker daemon. Docker Desktop
+users can pass a natural Windows host path such as
+`C:\Users\name\projects\game` to a Linux sidecar; the sidecar sends it to the
+daemon unchanged and uses the daemon-reported bind source after validation.
+The path must contain `Assets`, `Packages`, and `ProjectSettings` directories.
+
+One worker is retained for each normalized project and immutable controller
+image. Only the three project directories are bind-mounted writable; the
+worker's `Library` remains in its container layer so imports survive later
+calls and stay specific to that image and container OS. Workers inherit known
+Unity editor, cache, configuration, licensing, and Steam volumes, applicable
+resource limits and GPU device configuration, and only these environment
+variables when present: `UNITY_NO_GRAPHICS`, `UNITY_ACCELERATOR_ENDPOINT`,
+`UNITY_ACCELERATOR_PARAMS`, `UNITY_LOGGING`, `UNITY_EMPTY_MANIFEST`,
+`UNITY_CREDENTIALS_USR`, `UNITY_CREDENTIALS_PSW`, `EMAIL_CREDENTIALS_USR`,
+`EMAIL_CREDENTIALS_PSW`, and `COMPOSE_UNITY_CALL_TIMEOUT`. The Docker socket or
+named pipe is never passed to workers.
+
+Calls use a FIFO lane per project. A daemon-wide project lock also prevents
+overlapping Unity operations from duplicate sidecars or different image
+revisions. Sidecar shutdown stops accepting MCP calls and gracefully stops any
+worker currently executing one, which invokes the existing Unity process-tree
+shutdown policy while retaining the worker container and its imported
+`Library` for restart.
+
+MCP startup is included in sidecar readiness, `status`, and Docker health when
+enabled. Startup fails if Docker Engine access or self-container inspection is
+unavailable. The server accepts loopback `Host` and `Origin` values only; it
+does not provide authentication and is not intended for remote publication.
+
 The Windows image also compiles a Unity Hub launcher that adapts headless command-line arguments for Windows containers. Its embedded Hub runtime is patched to retry interrupted downloads and launch Editor installers directly instead of waiting for unavailable UAC interaction.
 
 Windows containers do not provide the interactive desktop shell expected by

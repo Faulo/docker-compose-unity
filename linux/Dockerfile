@@ -232,6 +232,8 @@ RUN compose-unity exec unity-build && \
 
 VOLUME ["/root/Unity", "/root/Steam", "/root/.config/unity3d", "/root/.config/unityhub", "/root/.cache/Unity", "/root/.local/share/unity3d"]
 
+EXPOSE 8080
+
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
     CMD ["compose-unity-sidecar", "health"]
 
