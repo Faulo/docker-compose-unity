@@ -214,10 +214,28 @@ the Windows versions used by these image variants.
 
 ## Volumes and Licensing
 
-The named `unity-binaries` volume persists downloaded Unity editors:
+Use the following named volumes to persist Unity editors, configuration, Hub
+state, caches, and licensing data on Linux:
 
-- Linux: `/root/Unity`
-- Windows: `C:/Program Files/Unity/Hub/Editor`
+```yaml
+volumes:
+  - unity-binaries:/root/Unity
+  - unity-config:/root/.config/unity3d
+  - unity-hub:/root/.config/unityhub
+  - unity-cache:/root/.cache/Unity
+  - unity-license:/root/.local/share/unity3d
+```
+
+The equivalent Windows volume mappings are:
+
+```yaml
+volumes:
+  - unity-binaries:C:/Program Files/Unity/Hub/Editor
+  - unity-config:C:/Users/ContainerAdministrator/AppData/Roaming/Unity
+  - unity-hub:C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub
+  - unity-cache:C:/Users/ContainerAdministrator/AppData/Local/Unity
+  - unity-license:C:/ProgramData/Unity
+```
 
 SteamCMD state can be persisted at:
 
@@ -227,9 +245,8 @@ SteamCMD state can be persisted at:
 On Windows, the `steamcmd` command seeds Valve's standalone installer into an
 empty `C:/steam` volume, then runs and updates SteamCMD there. On both
 platforms, reusing the Steam volume preserves updater downloads and login
-configuration across containers. The Dockerfiles also declare Unity, Unity
-Hub, cache, configuration, licensing, and SteamCMD state directories as
-volumes.
+configuration across containers. The Dockerfiles declare all Unity state paths
+shown above and the SteamCMD state directory as volumes.
 
 `linux/machine-id` supplies a stable Linux machine identity used by the image. Changes to that file, credential forwarding, editor paths, or licensing volumes can invalidate persisted licensing and should be made deliberately.
 
