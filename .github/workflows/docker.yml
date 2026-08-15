@@ -113,8 +113,7 @@ jobs:
             windows_context: .
             windows_variants: >-
                 [
-                  {"tag":"windows-20H2","build_args":{"OS_BASE":"20H2"}},
-                  {"tag":"windows-1809","build_args":{"OS_BASE":"1809"}}
+                  {"tag":"windows-ltsc2019","build_args":{"OS_BASE":"ltsc2019"}}
                 ]
         secrets:
             DOCKERHUB_USERNAME: ${{secrets.DOCKERHUB_USERNAME}}

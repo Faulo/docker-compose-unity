@@ -66,7 +66,7 @@ Windows-specific build arguments are:
 
 | Argument | Default | Purpose |
 | --- | --- | --- |
-| `OS_BASE` | `1809` | Selects the Windows base; `1809` and `20H2` are supported. |
+| `OS_BASE` | `ltsc2019` | Selects the supported Windows LTSC 2019 base. Legacy `20H2` build inputs are retained as implementation reference only. |
 | `POWERSHELL_VERSION` | `7.6.4` | Selects the installed PowerShell release. |
 
 ## Repository Layout

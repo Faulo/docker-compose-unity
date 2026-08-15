@@ -1,4 +1,4 @@
-ARG OS_BASE=1809
+ARG OS_BASE=ltsc2019
 FROM mcr.microsoft.com/windows:${OS_BASE}
 
 ARG OS_BASE
