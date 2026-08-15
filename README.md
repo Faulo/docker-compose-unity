@@ -356,7 +356,10 @@ dotnet test common/ComposeUnity.DaemonTests/ComposeUnity.DaemonTests.csproj --co
 The fixtures use the explicitly named `linux` and `windows` Docker contexts,
 verify the daemon-reported container OS, and skip each platform independently
 when its context or daemon is unavailable. Only local named-pipe and Unix-socket
-contexts are accepted.
+contexts are accepted. Set `COMPOSE_UNITY_DAEMON_TEST_REQUIRED_OS` to `linux` or
+`windows` to turn an unavailable matching fixture into a test failure. CI sets
+this for its platform-specific jobs so a green job proves that its daemon tests
+actually ran while ordinary local runs remain portable.
 
 The tests publish the current controller and a deterministic fake
 `compose-unity` executable, then assemble a minimal image from the applicable

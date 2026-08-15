@@ -276,9 +276,9 @@ sealed class UnityMcpController : IAsyncDisposable {
 
                 string projectSlug = WebGlHosting.ProjectSlug(project.probe.projectName);
                 var build = await WebGlHosting.ClaimBuildDirectoryAsync(WebGlHosting.documentRoot, projectSlug, token);
-                await docker.ExtractArchiveAsync(
-                    worker.id,
-                    CombineContainerPath(workerOutput, ".", windowsContainers),
+                await ExtractWorkerArchiveAsync(
+                    worker,
+                    workerOutput,
                     build.directory,
                     token);
                 string path = WebGlHosting.PublicPath(build);
@@ -331,6 +331,61 @@ sealed class UnityMcpController : IAsyncDisposable {
         } finally {
             activeWorkers.TryRemove(worker.id, out _);
         }
+    }
+
+    async Task ExtractWorkerArchiveAsync(
+        WorkerContainer worker,
+        string source,
+        string destination,
+        CancellationToken cancellationToken) {
+        if (!windowsContainers) {
+            await docker.ExtractArchiveAsync(
+                worker.id,
+                CombineContainerPath(source, ".", false),
+                destination,
+                cancellationToken);
+            return;
+        }
+
+        // Docker cannot access a running Hyper-V container's filesystem through
+        // the archive endpoint. Stopping and restarting preserves the retained
+        // worker's writable layer, including its imported Unity Library.
+        try {
+            await docker.StopContainerAsync(worker.id, WorkerStopTimeout, cancellationToken);
+            await docker.ExtractArchiveAsync(worker.id, source, destination, cancellationToken);
+            MoveArchiveContentsToRoot(destination, ContainerPathName(source));
+        } finally {
+            if (!stoppingToken.IsCancellationRequested) {
+                try {
+                    await docker.StartContainerAsync(worker.id, CancellationToken.None);
+                } catch (DockerApiException exception) when (exception.statusCode == HttpStatusCode.NotModified) {
+                }
+            }
+        }
+    }
+
+    internal static string ContainerPathName(string path) {
+        int separator = Math.Max(path.LastIndexOf('/'), path.LastIndexOf('\\'));
+        return path[(separator + 1)..];
+    }
+
+    internal static void MoveArchiveContentsToRoot(string destination, string archiveDirectoryName) {
+        string archiveRoot = Path.Combine(destination, archiveDirectoryName);
+        if (!Directory.Exists(archiveRoot)) {
+            throw new InvalidOperationException($"Docker archive did not contain its expected root directory '{archiveDirectoryName}'.");
+        }
+
+        foreach (string entry in Directory.EnumerateFileSystemEntries(archiveRoot)) {
+            string name = Path.GetFileName(entry);
+            string target = Path.Combine(destination, name);
+            if (Directory.Exists(entry)) {
+                Directory.Move(entry, target);
+            } else {
+                File.Move(entry, target);
+            }
+        }
+
+        Directory.Delete(archiveRoot);
     }
 
     async Task RemoveWorkerDirectoryBestEffortAsync(WorkerContainer worker, string path) {

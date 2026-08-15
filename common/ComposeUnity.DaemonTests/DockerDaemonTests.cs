@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -12,6 +14,7 @@ namespace ComposeUnity.DaemonTests;
 [TestFixture("windows", "windows")]
 [CancelAfter(10 * 60 * 1000)]
 public sealed partial class DockerDaemonTests(string expectedOs, string dockerContext) {
+    const string REQUIRED_OS_ENVIRONMENT = "COMPOSE_UNITY_DAEMON_TEST_REQUIRED_OS";
     readonly string id = Guid.NewGuid().ToString("N");
     string repository = string.Empty;
     string project = string.Empty;
@@ -27,6 +30,13 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
 
     [OneTimeSetUp]
     public async Task SetUpDaemonAsync() {
+        string? requiredOs = Environment.GetEnvironmentVariable(REQUIRED_OS_ENVIRONMENT);
+        if (!string.IsNullOrEmpty(requiredOs)
+            && !requiredOs.Equals("linux", StringComparison.OrdinalIgnoreCase)
+            && !requiredOs.Equals("windows", StringComparison.OrdinalIgnoreCase)) {
+            Assert.Fail($"{REQUIRED_OS_ENVIRONMENT} must be 'linux', 'windows', or unset, but was '{requiredOs}'.");
+        }
+
         repository = FindRepository();
         project = Path.Combine(repository, "common", "ComposeUnity.Tests", "test-files", "ValidProject");
         staging = Path.Combine(Path.GetTempPath(), $"compose-unity-daemon-tests-{id}");
@@ -35,17 +45,17 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
 
         var inspection = await RunAsync("docker", ["context", "inspect", dockerContext, "--format", "{{.Endpoints.docker.Host}}"], TimeSpan.FromSeconds(5));
         if (inspection.exitCode != 0) {
-            Assert.Ignore($"Docker context '{dockerContext}' is unavailable: {Detail(inspection)}");
+            IgnoreOrFail($"Docker context '{dockerContext}' is unavailable: {Detail(inspection)}");
         }
 
         string contextEndpoint = inspection.standardOutput.Trim();
         if (!IsLocalEndpoint(contextEndpoint)) {
-            Assert.Ignore($"Docker context '{dockerContext}' is not local: {contextEndpoint}");
+            IgnoreOrFail($"Docker context '{dockerContext}' is not local: {contextEndpoint}");
         }
 
         var version = await RunDockerAsync(["version", "--format", "{{.Server.Os}}"], TimeSpan.FromSeconds(5));
         if (version.exitCode != 0) {
-            Assert.Ignore($"Docker context '{dockerContext}' is offline: {Detail(version)}");
+            IgnoreOrFail($"Docker context '{dockerContext}' is offline: {Detail(version)}");
         }
 
         Assert.That(version.standardOutput.Trim(), Is.EqualTo(expectedOs).IgnoreCase,
@@ -243,7 +253,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             Assert.That(index.Headers.GetValues("Cross-Origin-Resource-Policy"), Does.Contain("cross-origin"));
             Assert.That(encoded.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/wasm"));
             Assert.That(encoded.Content.Headers.ContentEncoding, Does.Contain("br"));
-            Assert.That(range.StatusCode, Is.EqualTo(System.Net.HttpStatusCode.PartialContent));
+            Assert.That(range.StatusCode, Is.EqualTo(HttpStatusCode.PartialContent));
             Assert.That(rangeContent, Is.EqualTo("2345"));
         }
     }
@@ -275,20 +285,33 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     }
 
     async Task ConfigureMcpClientAsync() {
-        httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         if (expectedOs == "windows") {
             string address = (await DockerCheckedAsync(["inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", container])).standardOutput.Trim();
             Assert.That(IpAddressRegex().IsMatch(address), Is.True, $"Could not determine the Windows container address: {address}");
-            endpoint = new Uri($"http://{address}:8080/mcp");
-            httpClient.DefaultRequestHeaders.Host = "localhost";
+            var handler = new SocketsHttpHandler {
+                ConnectCallback = async (context, cancellationToken) => {
+                    var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+                    try {
+                        await socket.ConnectAsync(IPAddress.Parse(address), context.DnsEndPoint.Port, cancellationToken);
+                        return new NetworkStream(socket, ownsSocket: true);
+                    } catch {
+                        socket.Dispose();
+                        throw;
+                    }
+                }
+            };
+            httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(2) };
+            endpoint = new Uri("http://localhost:8080/mcp");
         } else {
             string published = (await DockerCheckedAsync(["port", container, "8080/tcp"])).standardOutput.Trim();
             var match = PublishedPortRegex().Match(published);
             Assert.That(match.Success, Is.True, $"Could not parse the published MCP port: {published}");
             endpoint = new Uri($"http://127.0.0.1:{match.Groups["port"].Value}/mcp");
+            httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
         }
+
+        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
     }
 
     async Task InitializeMcpAsync() {
@@ -391,6 +414,14 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         string suffix = value[3..].Replace('\\', '/').TrimEnd('/');
         string root = $"/run/desktop/mnt/host/{char.ToLowerInvariant(value[0])}";
         return suffix.Length == 0 ? root : $"{root}/{suffix}";
+    }
+
+    void IgnoreOrFail(string message) {
+        if (Environment.GetEnvironmentVariable(REQUIRED_OS_ENVIRONMENT)?.Equals(expectedOs, StringComparison.OrdinalIgnoreCase) == true) {
+            Assert.Fail($"The required {expectedOs} daemon fixture could not run. {message}");
+        }
+
+        Assert.Ignore(message);
     }
 
     static bool IsLocalEndpoint(string value) => value.StartsWith("npipe://", StringComparison.OrdinalIgnoreCase)

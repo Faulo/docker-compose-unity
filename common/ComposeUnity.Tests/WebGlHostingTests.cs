@@ -1,6 +1,32 @@
 namespace ComposeUnity.Tests;
 
 public sealed class WebGlHostingTests {
+    [TestCase(@"C:\Windows\Temp\compose-unity-webgl\build-id", "build-id")]
+    [TestCase("/tmp/compose-unity-webgl/build-id", "build-id")]
+    public void GetsContainerPathNameAcrossPlatforms(string path, string expected) {
+        Assert.That(UnityMcpController.ContainerPathName(path), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void MovesWindowsArchiveDirectoryContentsToBuildRoot() {
+        string destination = Path.Combine(Path.GetTempPath(), "compose-unity-webgl-archive-tests-" + Guid.NewGuid().ToString("N"));
+        string archiveRoot = Path.Combine(destination, "worker-build-id");
+        Directory.CreateDirectory(Path.Combine(archiveRoot, "Build"));
+        File.WriteAllText(Path.Combine(archiveRoot, "index.html"), "fixture");
+        File.WriteAllText(Path.Combine(archiveRoot, "Build", "game.data"), "data");
+        try {
+            UnityMcpController.MoveArchiveContentsToRoot(destination, "worker-build-id");
+
+            Assert.Multiple(() => {
+                Assert.That(File.ReadAllText(Path.Combine(destination, "index.html")), Is.EqualTo("fixture"));
+                Assert.That(File.ReadAllText(Path.Combine(destination, "Build", "game.data")), Is.EqualTo("data"));
+                Assert.That(Directory.Exists(archiveRoot), Is.False);
+            });
+        } finally {
+            Directory.Delete(destination, true);
+        }
+    }
+
     [Test]
     public void UsesToolInstallationDirectoryAsDocumentRoot() {
         Assert.That(WebGlHosting.documentRoot, Is.EqualTo(OperatingSystem.IsWindows()

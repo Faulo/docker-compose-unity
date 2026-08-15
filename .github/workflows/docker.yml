@@ -37,6 +37,8 @@ jobs:
               run: docker context create linux --docker host=unix:///var/run/docker.sock
             - name: Run real-daemon tests
               run: dotnet test common/ComposeUnity.DaemonTests/ComposeUnity.DaemonTests.csproj --nologo --configuration Release
+              env:
+                  COMPOSE_UNITY_DAEMON_TEST_REQUIRED_OS: linux
 
     test-windows:
         runs-on: windows-2022
@@ -78,6 +80,8 @@ jobs:
               run: docker context create windows --docker "host=npipe:////./pipe/docker_engine"
             - name: Run Windows real-daemon tests
               run: dotnet test common/ComposeUnity.DaemonTests/ComposeUnity.DaemonTests.csproj --nologo --configuration Release
+              env:
+                  COMPOSE_UNITY_DAEMON_TEST_REQUIRED_OS: windows
 
     configuration:
         needs:
