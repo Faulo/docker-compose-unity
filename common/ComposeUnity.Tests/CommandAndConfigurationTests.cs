@@ -45,6 +45,9 @@ public sealed class CommandAndConfigurationTests {
             Assert.That(startInfo.Environment["COMPOSER"], Is.EqualTo(OperatingSystem.IsWindows()
                 ? @"C:\compose-unity\composer.json"
                 : "/compose-unity/composer.json"));
+            Assert.That(startInfo.Environment["COMPOSER_VENDOR_DIR"], Is.EqualTo(OperatingSystem.IsWindows()
+                ? @"C:\compose-unity\vendor"
+                : "/compose-unity/vendor"));
             Assert.That(startInfo.WorkingDirectory, Is.EqualTo(Environment.CurrentDirectory));
             Assert.That(arguments, Does.Not.Contain("-d"));
             Assert.That(arguments, Does.Not.Contain(OperatingSystem.IsWindows()

@@ -172,10 +172,10 @@ Both images compile the shared C# source in `common/ComposeUnity/` into one
 canonical native launcher named `compose-unity`. The launcher invokes Composer
 without an intermediate shell, selects the installed
 `/compose-unity/composer.json` or `C:\compose-unity\composer.json` through
-Composer's `COMPOSER` environment variable, preserves the caller's working
-directory, attached input, output, and exit status, and registers each call
-with the sidecar. The image-level `COMPOSE_UNITY` command points to this native
-launcher as well.
+Composer's `COMPOSER` environment variable, pins installed dependencies to that
+same directory, preserves the caller's working directory, attached input,
+output, and exit status, and registers each call with the sidecar. The
+image-level `COMPOSE_UNITY` command points to this native launcher as well.
 
 ## Long-Running Sidecar
 
@@ -283,7 +283,7 @@ The server advertises exactly four tools:
 - `execute_method` runs a fully qualified static editor method with
   argument boundaries preserved and asks Unity to quit after it returns.
 - `build_and_serve_webgl` installs the selected editor's WebGL Build Support
-  module, invokes
+  module, starts Unity with the WebGL build target selected, invokes
   `Slothsoft.UnityExtensions.Editor.Build.WebGL`, copies the successful build
   from the retained worker through the Docker Engine archive API, and returns a
   browser-ready URL on the MCP listener. The project must provide

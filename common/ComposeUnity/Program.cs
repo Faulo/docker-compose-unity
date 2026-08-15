@@ -367,18 +367,22 @@ static class Program {
     static ProcessStartInfo ComposerStartInfo(bool redirectOutput) {
         ProcessStartInfo startInfo;
         string composerProject;
+        string composerVendorDirectory;
         if (OperatingSystem.IsWindows()) {
             startInfo = new ProcessStartInfo("php.exe");
             startInfo.ArgumentList.Add(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                 "ComposerSetup", "bin", "composer.phar"));
             composerProject = @"C:\compose-unity\composer.json";
+            composerVendorDirectory = @"C:\compose-unity\vendor";
         } else {
             startInfo = new ProcessStartInfo("composer");
             composerProject = "/compose-unity/composer.json";
+            composerVendorDirectory = "/compose-unity/vendor";
         }
 
         startInfo.Environment["COMPOSER"] = composerProject;
+        startInfo.Environment["COMPOSER_VENDOR_DIR"] = composerVendorDirectory;
         startInfo.WorkingDirectory = Environment.CurrentDirectory;
         startInfo.UseShellExecute = false;
         startInfo.RedirectStandardOutput = redirectOutput;

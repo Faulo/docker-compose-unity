@@ -161,6 +161,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             Assert.That(backend["composerProject"]!.GetValue<string>(), Is.EqualTo(expectedOs == "windows"
                 ? @"C:\compose-unity\composer.json"
                 : "/compose-unity/composer.json"));
+            Assert.That(backend["composerVendorDirectory"]!.GetValue<string>(), Is.EqualTo(expectedOs == "windows"
+                ? @"C:\compose-unity\vendor"
+                : "/compose-unity/vendor"));
         }
     }
 

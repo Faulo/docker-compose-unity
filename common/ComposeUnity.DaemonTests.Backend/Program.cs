@@ -62,12 +62,12 @@ static int executeMethod(string[] command) {
     int arguments = Array.IndexOf(command, "--");
     string[] values = arguments < 0 ? [] : command[(arguments + 1)..];
     if (command[2] == "Slothsoft.UnityExtensions.Editor.Build.WebGL") {
-        if (values.Length != 1) {
-            Console.Error.WriteLine("The WebGL build requires exactly one output path.");
+        if (values.Length != 3 || values[0] != "-buildTarget" || values[1] != "WebGL") {
+            Console.Error.WriteLine("The WebGL build requires its target and exactly one output path.");
             return 2;
         }
 
-        string output = values[0];
+        string output = values[2];
         Directory.CreateDirectory(Path.Combine(output, "Build"));
         File.WriteAllText(Path.Combine(output, "index.html"), "<!doctype html><title>Daemon WebGL Build</title><h1>Ready</h1>");
         File.WriteAllBytes(Path.Combine(output, "Build", "game.data"), Encoding.ASCII.GetBytes("0123456789"));
@@ -80,7 +80,8 @@ static int executeMethod(string[] command) {
         method = command[2],
         arguments = values,
         workingDirectory = Environment.CurrentDirectory,
-        composerProject = Environment.GetEnvironmentVariable("COMPOSER")
+        composerProject = Environment.GetEnvironmentVariable("COMPOSER"),
+        composerVendorDirectory = Environment.GetEnvironmentVariable("COMPOSER_VENDOR_DIR")
     }));
     Console.Error.WriteLine("daemon-test stderr");
     return 7;

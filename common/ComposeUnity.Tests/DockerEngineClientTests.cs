@@ -389,7 +389,9 @@ public sealed class DockerEngineClientTests {
                 Does.Match("^[0-9a-f]{64}$"));
             Assert.That(workerConfiguration["HostConfig"]?["Memory"]?.GetValue<long>(), Is.EqualTo(1_048_576));
             Assert.That(workerConfiguration["HostConfig"]?["ShmSize"]?.GetValue<long>(), Is.EqualTo(67_108_864));
-            Assert.That(workerEnvironment, Is.EqualTo(new[] { "COMPOSE_UNITY_CALL_TIMEOUT=30", "UNITY_NO_GRAPHICS=1" }));
+            Assert.That(workerEnvironment, Is.EqualTo(new[] {
+                "COMPOSE_UNITY_CALL_TIMEOUT=30", "UNITY_NO_GRAPHICS=1", "DOTNET_GCHeapCount=2"
+            }));
             Assert.That(probeMount["ReadOnly"]?.GetValue<bool>(), Is.True);
             Assert.That(probeMount["BindOptions"]?["CreateMountpoint"]?.GetValue<bool>(), Is.False);
             Assert.That(workerMounts, Has.Count.EqualTo(4));

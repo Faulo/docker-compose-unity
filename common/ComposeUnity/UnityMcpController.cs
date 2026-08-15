@@ -13,6 +13,7 @@ namespace ComposeUnity;
 sealed class UnityMcpController : IAsyncDisposable {
     const string LABEL_PREFIX = "net.slothsoft.compose-unity";
     const string WORKER_CONFIGURATION_LABEL = $"{LABEL_PREFIX}.worker-configuration";
+    const string WORKER_DOTNET_GC_HEAP_COUNT = "DOTNET_GCHeapCount=2";
     static readonly TimeSpan WorkerStopTimeout = TimeSpan.FromSeconds(10);
 
     static readonly string[] ForwardedEnvironmentNames = [
@@ -262,6 +263,8 @@ sealed class UnityMcpController : IAsyncDisposable {
                     WorkerProjectRoot,
                     "Slothsoft.UnityExtensions.Editor.Build.WebGL",
                     "--",
+                    "-buildTarget",
+                    "WebGL",
                     workerOutput
                 ], token);
                 EnsureSuccessful(buildResult, "Unity WebGL build");
@@ -566,6 +569,10 @@ sealed class UnityMcpController : IAsyncDisposable {
         foreach (string entry in entries) {
             result.Add(entry);
         }
+
+        // Unity's Roslyn compiler server otherwise creates one server-GC heap per host CPU and can
+        // retain enough memory to crowd IL2CPP out of a Docker Desktop VM during the same build.
+        result.Add(WORKER_DOTNET_GC_HEAP_COUNT);
 
         return result;
     }
