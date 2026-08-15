@@ -270,6 +270,17 @@ Desktop daemon translates ordinary Windows drive paths such as
 remote Linux daemons, and Windows-container daemons keep their existing path
 behavior.
 
+`run_tests`, `execute_method`, and `build_and_serve_webgl` can take 30–60
+minutes during a cold editor install or first project import. When the caller
+supplies `_meta.progressToken`, they emit request-correlated standard MCP
+progress notifications for validation, project-lock waits, worker preparation,
+the tool-specific operation, and result processing or publication. Quiet phases
+send at most one heartbeat per 60 seconds. These notifications indicate
+liveness and coarse status; they are not streamed Unity logs or trustworthy
+completion percentages. Callers should await the original tool request rather
+than restart it or launch parallel diagnostics. `get_project_info` never starts
+Unity and does not report progress.
+
 - `get_project_info` validates a Docker-host project path and returns its normalized
   root, company, product and editor versions, major code and rendering settings,
   input handling, and complete package manifest by reading the project's YAML

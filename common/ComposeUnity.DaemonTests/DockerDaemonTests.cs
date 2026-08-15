@@ -147,6 +147,44 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     }
 
     [Test]
+    public async Task StreamsCorrelatedProgressBeforeTheFinalToolResult() {
+        string progressToken = $"daemon-progress-{expectedOs}";
+        var events = await InvokeMcpEventsAsync("tools/call", new JsonObject {
+            ["name"] = "execute_method",
+            ["arguments"] = new JsonObject {
+                ["projectRoot"] = project,
+                ["method"] = "DaemonTests.Progress",
+                ["arguments"] = new JsonArray()
+            },
+            ["_meta"] = new JsonObject { ["progressToken"] = progressToken }
+        });
+        JsonNode[] notifications = events
+            .Where(item => item["method"]?.GetValue<string>() == "notifications/progress")
+            .ToArray();
+        int finalIndex = events.FindIndex(item => item["id"] is not null);
+        float[] values = notifications
+            .Select(item => item["params"]!["progress"]!.GetValue<float>())
+            .ToArray();
+
+        Assert.That(notifications, Is.Not.Empty, $"No progress notifications were received: {JsonSerializer.Serialize(events)}");
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(finalIndex, Is.EqualTo(events.Count - 1), "The final tool response must follow every progress notification.");
+            Assert.That(notifications.All(item => item["params"]!["progressToken"]!.GetValue<string>() == progressToken), Is.True);
+            Assert.That(values.Zip(values.Skip(1), (first, second) => second > first), Is.All.True);
+            Assert.That(notifications.All(item => item["params"]!["total"] is null), Is.True);
+        }
+
+        JsonNode response = events[finalIndex];
+        Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
+        var result = ToolResult(response);
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(result["exitStatus"]!.GetValue<int>(), Is.EqualTo(7));
+            Assert.That(result["errorOutput"]!.GetValue<string>(), Is.EqualTo("daemon-test stderr"));
+            Assert.That(JsonNode.Parse(result["output"]!.GetValue<string>())!["method"]!.GetValue<string>(), Is.EqualTo("DaemonTests.Progress"));
+        }
+    }
+
+    [Test]
     public async Task NativeLauncherPreservesWorkingDirectory() {
         string workingDirectory = expectedOs == "windows" ? @"C:\Windows\Temp" : "/tmp";
         string executable = expectedOs == "windows"
@@ -328,21 +366,34 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         await InvokeMcpAsync("tools/call", new JsonObject { ["name"] = name, ["arguments"] = arguments });
 
     async Task<JsonNode> InvokeMcpAsync(string method, JsonObject parameters) {
+        var events = await InvokeMcpEventsAsync(method, parameters);
+        Assert.That(events, Has.Count.EqualTo(1), $"Unexpected MCP events: {JsonSerializer.Serialize(events)}");
+        return events[0];
+    }
+
+    async Task<List<JsonNode>> InvokeMcpEventsAsync(string method, JsonObject parameters) {
         var body = new JsonObject {
             ["jsonrpc"] = "2.0",
             ["id"] = Interlocked.Increment(ref requestId),
             ["method"] = method,
             ["params"] = parameters
         };
-        using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
-        using var response = await httpClient!.PostAsync(endpoint, content);
-        string responseBody = await response.Content.ReadAsStringAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json")
+        };
+        using var response = await httpClient!.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
-        string[] data = responseBody.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .Where(line => line.StartsWith("data: ", StringComparison.Ordinal))
-            .ToArray();
-        Assert.That(data, Has.Length.EqualTo(1), $"Unexpected MCP response: {responseBody}");
-        return JsonNode.Parse(data[0][6..])!;
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(stream);
+        var events = new List<JsonNode>();
+        while (await reader.ReadLineAsync() is { } line) {
+            if (line.StartsWith("data: ", StringComparison.Ordinal)) {
+                events.Add(JsonNode.Parse(line[6..])!);
+            }
+        }
+
+        Assert.That(events, Is.Not.Empty, "The MCP response contained no SSE data events.");
+        return events;
     }
 
     async Task ExecuteMethodAsync(string method, string? projectRoot = null) {

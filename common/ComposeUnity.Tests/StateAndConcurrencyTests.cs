@@ -43,6 +43,7 @@ public sealed class StateAndConcurrencyTests {
     public async Task GrantsFifoLockInRequestOrder() {
         var fifo = new AsyncFifoLock();
         var order = new List<int>();
+        int waits = 0;
         await using var first = await fifo.AcquireAsync(CancellationToken.None);
         var second = enterAsync(2);
         var third = enterAsync(3);
@@ -50,10 +51,13 @@ public sealed class StateAndConcurrencyTests {
         await first.DisposeAsync();
         await Task.WhenAll(second, third);
 
-        Assert.That(order, Is.EqualTo(new[] { 2, 3 }));
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(order, Is.EqualTo(new[] { 2, 3 }));
+            Assert.That(waits, Is.EqualTo(2));
+        }
 
         async Task enterAsync(int value) {
-            await using var lease = await fifo.AcquireAsync(CancellationToken.None);
+            await using var lease = await fifo.AcquireAsync(CancellationToken.None, () => Interlocked.Increment(ref waits));
             order.Add(value);
         }
     }

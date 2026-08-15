@@ -356,12 +356,13 @@ public sealed class DockerEngineClientTests {
         });
         await using var controller = await engine.CreateControllerAsync(CancellationToken.None);
 
-        object first = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["", "two words", "--"], CancellationToken.None);
-        object second = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["again"], CancellationToken.None);
+        var progress = new RecordingProgress();
+        object first = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["", "two words", "--"], progress, CancellationToken.None);
+        object second = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["again"], NoProgress.Instance, CancellationToken.None);
         int workerCreatesAfterReuse = workerCreates;
         string workerName = configurations.Keys.Single(name => name.StartsWith("compose-unity-worker-", StringComparison.Ordinal));
         configurations[workerName]["Labels"]!["net.slothsoft.compose-unity.worker-configuration"] = "stale";
-        object third = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["after-change"], CancellationToken.None);
+        object third = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["after-change"], NoProgress.Instance, CancellationToken.None);
 
         var firstResult = JsonNode.Parse(JsonSerializer.Serialize(first))!.AsObject();
         var probeMount = probeConfiguration!["HostConfig"]!["Mounts"]![0]!;
@@ -379,6 +380,12 @@ public sealed class DockerEngineClientTests {
             Assert.That(workerCreates, Is.EqualTo(2), "A worker with a stale configuration fingerprint should be replaced.");
             Assert.That(workerDeletes, Is.EqualTo(1));
             Assert.That(execCreates, Is.EqualTo(3));
+            Assert.That(progress.Snapshot().Select(value => value.Message), Is.EqualTo(new[] {
+                "Validating Unity project",
+                "Preparing or reusing Unity worker",
+                "Invoking Unity editor method",
+                "Preparing method result"
+            }));
             Assert.That(firstResult["exitStatus"]?.GetValue<int>(), Is.EqualTo(7));
             Assert.That(firstResult["output"]?.GetValue<string>(), Is.EqualTo("method output"));
             Assert.That(firstResult["errorOutput"]?.GetValue<string>(), Is.EqualTo("method warning"));
@@ -433,6 +440,13 @@ public sealed class DockerEngineClientTests {
 }
 
 sealed record FakeDockerRequest(string method, string path, string body);
+
+sealed class NoProgress : IProgress<ModelContextProtocol.ProgressNotificationValue> {
+    internal static NoProgress Instance { get; } = new();
+
+    public void Report(ModelContextProtocol.ProgressNotificationValue value) {
+    }
+}
 
 sealed record FakeDockerResponse(HttpStatusCode statusCode, string contentType, byte[] body) {
     internal static FakeDockerResponse Bytes(byte[] body) => new(HttpStatusCode.OK, "application/octet-stream", body);

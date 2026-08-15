@@ -188,14 +188,17 @@ sealed class UnityMcpTools(UnityMcpController controller, IHttpContextAccessor c
         OpenWorld = false,
         UseStructuredContent = true)]
     [Description(
-        "Run Unity Test Runner modes for a Docker-host Unity project. Valid JUnit reports return compact pass/fail counts and failure details; infrastructure errors return the complete ordered Unity log.")]
+        "Run Unity Test Runner modes for a Docker-host Unity project. Cold imports can take 30-60 minutes; " +
+        "progress notifications report liveness, so await the original call instead of restarting it or launching parallel diagnostics. " +
+        "Valid JUnit reports return compact pass/fail counts and failure details; infrastructure errors return the complete ordered Unity log.")]
     public async Task<object> RunTestsAsync(
         [Description("Absolute host path to an existing Unity project.")]
         string projectRoot,
         [Description("One or more Unity test modes, such as EditMode, PlayMode, or a platform.")]
         string[] modes,
+        IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken) =>
-        await InvokeAsync(() => controller.RunTestsAsync(projectRoot, modes, cancellationToken));
+        await InvokeAsync(() => controller.RunTestsAsync(projectRoot, modes, progress, cancellationToken));
 
     [McpServerTool(
         Name = "execute_method",
@@ -204,16 +207,19 @@ sealed class UnityMcpTools(UnityMcpController controller, IHttpContextAccessor c
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Run a fully qualified static Unity editor method, ask Unity to quit afterward, and return its exit status and relevant output.")]
+    [Description(
+        "Run a fully qualified static Unity editor method and ask Unity to quit afterward. Cold imports can take 30-60 minutes; " +
+        "progress notifications report liveness, so await the original call instead of restarting it or launching parallel diagnostics.")]
     public async Task<object> ExecuteMethodAsync(
         [Description("Absolute host path to an existing Unity project.")]
         string projectRoot,
         [Description("Fully qualified static Unity editor method name.")]
         string method,
+        IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken,
         [Description("Optional arguments forwarded without shell reinterpretation.")]
         string[]? arguments = null) =>
-        await InvokeAsync(() => controller.ExecuteMethodAsync(projectRoot, method, arguments, cancellationToken));
+        await InvokeAsync(() => controller.ExecuteMethodAsync(projectRoot, method, arguments, progress, cancellationToken));
 
     [McpServerTool(
         Name = "build_and_serve_webgl",
@@ -222,10 +228,13 @@ sealed class UnityMcpTools(UnityMcpController controller, IHttpContextAccessor c
         Idempotent = false,
         OpenWorld = false,
         UseStructuredContent = true)]
-    [Description("Build a Docker-host Unity project for WebGL and serve the immutable result from this MCP listener.")]
+    [Description(
+        "Build a Docker-host Unity project for WebGL and serve the immutable result from this MCP listener. Cold imports can take 30-60 minutes; " +
+        "progress notifications report liveness, so await the original call instead of restarting it or launching parallel diagnostics.")]
     public async Task<object> BuildAndServeWebGlAsync(
         [Description("Absolute host path to an existing Unity project.")]
         string projectRoot,
+        IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken) {
         var request = contexts.HttpContext?.Request
                       ?? throw new McpException("The WebGL build tool requires an HTTP request context.");
@@ -233,6 +242,7 @@ sealed class UnityMcpTools(UnityMcpController controller, IHttpContextAccessor c
             projectRoot,
             request.Scheme,
             request.Host.Value ?? string.Empty,
+            progress,
             cancellationToken));
     }
 

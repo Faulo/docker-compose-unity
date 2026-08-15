@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml;
 using System.Xml.Linq;
+using ModelContextProtocol;
 
 namespace ComposeUnity;
 
@@ -176,6 +177,7 @@ sealed class UnityMcpController : IAsyncDisposable {
     internal async Task<object> RunTestsAsync(
         string projectRoot,
         string[] modes,
+        IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken) {
         if (modes is null || modes.Length == 0 || modes.Any(string.IsNullOrWhiteSpace)) {
             throw new ArgumentException("modes must be a non-empty array of non-empty strings.", nameof(modes));
@@ -185,8 +187,12 @@ sealed class UnityMcpController : IAsyncDisposable {
             throw new ArgumentException("Each test mode must be at most 128 characters and contain no control characters.", nameof(modes));
         }
 
-        var project = await GetProjectAsync(projectRoot, cancellationToken);
-        return await ExecuteSerializedAsync(project, "run_tests", async (worker, token) => {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stoppingToken);
+        await using var operationProgress = new UnityMcpProgress(progress, linked.Token);
+        operationProgress.ReportPhase("Validating Unity project");
+        var project = await GetProjectAsync(projectRoot, linked.Token);
+        return await ExecuteSerializedAsync(project, "run_tests", operationProgress, async (worker, token) => {
+            operationProgress.ReportPhase("Running Unity tests");
             var command = new List<string> {
                 ComposeExecutable,
                 "exec",
@@ -199,14 +205,16 @@ sealed class UnityMcpController : IAsyncDisposable {
             };
             command.AddRange(modes);
             var result = await ExecuteWorkerAsync(worker, command, token);
+            operationProgress.ReportPhase("Parsing Unity test result");
             return BuildTestResult(result);
-        }, cancellationToken);
+        }, linked.Token);
     }
 
     internal async Task<object> ExecuteMethodAsync(
         string projectRoot,
         string method,
         string[]? arguments,
+        IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken) {
         if (string.IsNullOrWhiteSpace(method) || method.Length > 512 || method.Any(char.IsControl)) {
             throw new ArgumentException("method must be a non-empty static method name of at most 512 characters.", nameof(method));
@@ -217,8 +225,12 @@ sealed class UnityMcpController : IAsyncDisposable {
             throw new ArgumentException("arguments accepts at most 256 values of at most 16384 characters each.", nameof(arguments));
         }
 
-        var project = await GetProjectAsync(projectRoot, cancellationToken);
-        return await ExecuteSerializedAsync(project, "execute_method", async (worker, token) => {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stoppingToken);
+        await using var operationProgress = new UnityMcpProgress(progress, linked.Token);
+        operationProgress.ReportPhase("Validating Unity project");
+        var project = await GetProjectAsync(projectRoot, linked.Token);
+        return await ExecuteSerializedAsync(project, "execute_method", operationProgress, async (worker, token) => {
+            operationProgress.ReportPhase("Invoking Unity editor method");
             var command = new List<string> {
                 ComposeExecutable,
                 "exec",
@@ -231,21 +243,27 @@ sealed class UnityMcpController : IAsyncDisposable {
             };
             command.AddRange(arguments);
             var result = await ExecuteWorkerAsync(worker, command, token);
+            operationProgress.ReportPhase("Preparing method result");
             return new { exitStatus = result.exitCode, output = RelevantOutput(result.standardOutput), errorOutput = RelevantOutput(result.standardError) };
-        }, cancellationToken);
+        }, linked.Token);
     }
 
     internal async Task<object> BuildAndServeWebGlAsync(
         string projectRoot,
         string scheme,
         string host,
+        IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken) {
         if (scheme is not "http" and not "https" || string.IsNullOrWhiteSpace(host)) {
             throw new InvalidOperationException("The MCP request did not provide a valid public HTTP origin.");
         }
 
-        var project = await GetProjectAsync(projectRoot, cancellationToken);
-        return await ExecuteSerializedAsync(project, "build_and_serve_webgl", async (worker, token) => {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stoppingToken);
+        await using var operationProgress = new UnityMcpProgress(progress, linked.Token);
+        operationProgress.ReportPhase("Validating Unity project");
+        var project = await GetProjectAsync(projectRoot, linked.Token);
+        return await ExecuteSerializedAsync(project, "build_and_serve_webgl", operationProgress, async (worker, token) => {
+            operationProgress.ReportPhase("Installing WebGL Build Support - step 1 of 3");
             var moduleResult = await ExecuteWorkerAsync(worker, [
                 ComposeExecutable,
                 "exec",
@@ -259,6 +277,7 @@ sealed class UnityMcpController : IAsyncDisposable {
 
             string workerOutput = CombineContainerPath(WorkerWebGlRoot, Guid.NewGuid().ToString("N"), windowsContainers);
             try {
+                operationProgress.ReportPhase("Building WebGL - step 2 of 3");
                 var buildResult = await ExecuteWorkerAsync(worker, [
                     ComposeExecutable,
                     "exec",
@@ -274,6 +293,7 @@ sealed class UnityMcpController : IAsyncDisposable {
                 ], token);
                 EnsureSuccessful(buildResult, "Unity WebGL build");
 
+                operationProgress.ReportPhase("Publishing WebGL build - step 3 of 3");
                 string projectSlug = WebGlHosting.ProjectSlug(project.probe.projectName);
                 var build = await WebGlHosting.ClaimBuildDirectoryAsync(WebGlHosting.documentRoot, projectSlug, token);
                 await ExtractWorkerArchiveAsync(
@@ -286,7 +306,7 @@ sealed class UnityMcpController : IAsyncDisposable {
             } finally {
                 await RemoveWorkerDirectoryBestEffortAsync(worker, workerOutput);
             }
-        }, cancellationToken);
+        }, linked.Token);
     }
 
     internal async Task StopActiveWorkersAsync() {
@@ -302,15 +322,19 @@ sealed class UnityMcpController : IAsyncDisposable {
     async Task<object> ExecuteSerializedAsync(
         ValidatedProject project,
         string tool,
+        UnityMcpProgress progress,
         Func<WorkerContainer, CancellationToken, Task<object>> operation,
         CancellationToken cancellationToken) {
         var lane = lanes.GetOrAdd(project.id, _ => new AsyncFifoLock());
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stoppingToken);
-        await using var laneLease = await lane.AcquireAsync(linked.Token);
-        await using var daemonLease = await AcquireDaemonLockAsync(project, linked.Token);
+        await using var laneLease = await lane.AcquireAsync(
+            linked.Token,
+            () => progress.ReportPhase("Waiting for project access"));
+        await using var daemonLease = await AcquireDaemonLockAsync(project, progress, linked.Token);
         var started = DateTimeOffset.UtcNow;
         LogStart(tool, project.id);
         try {
+            progress.ReportPhase("Preparing or reusing Unity worker");
             var worker = await EnsureWorkerAsync(project, linked.Token);
             return await operation(worker, linked.Token);
         } finally {
@@ -660,6 +684,7 @@ sealed class UnityMcpController : IAsyncDisposable {
 
     async ValueTask<IAsyncDisposable> AcquireDaemonLockAsync(
         ValidatedProject project,
+        UnityMcpProgress progress,
         CancellationToken cancellationToken) {
         string name = $"compose-unity-lock-{project.id[..32]}";
         while (true) {
@@ -693,6 +718,7 @@ sealed class UnityMcpController : IAsyncDisposable {
                     continue;
                 }
 
+                progress.ReportPhase("Waiting for project access");
                 await Task.Delay(200, cancellationToken);
             }
         }
@@ -864,17 +890,22 @@ sealed class AsyncFifoLock {
     readonly Queue<Waiter> waiters = new();
     bool held;
 
-    internal ValueTask<IAsyncDisposable> AcquireAsync(CancellationToken cancellationToken) {
+    internal ValueTask<IAsyncDisposable> AcquireAsync(
+        CancellationToken cancellationToken,
+        Action? onWait = null) {
+        Waiter? waiter;
         lock (gate) {
             if (!held) {
                 held = true;
                 return ValueTask.FromResult<IAsyncDisposable>(new Lease(this));
             }
 
-            var waiter = new Waiter(this, cancellationToken);
+            waiter = new Waiter(this, cancellationToken);
             waiters.Enqueue(waiter);
-            return new ValueTask<IAsyncDisposable>(waiter.task);
         }
+
+        onWait?.Invoke();
+        return new ValueTask<IAsyncDisposable>(waiter.task);
     }
 
     void Release() {

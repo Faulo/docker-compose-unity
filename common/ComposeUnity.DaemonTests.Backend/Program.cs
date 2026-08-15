@@ -61,6 +61,10 @@ static int executeMethod(string[] command) {
 
     int arguments = Array.IndexOf(command, "--");
     string[] values = arguments < 0 ? [] : command[(arguments + 1)..];
+    if (command[2] == "DaemonTests.Progress") {
+        Thread.Sleep(TimeSpan.FromMilliseconds(500));
+    }
+
     if (command[2] == "Slothsoft.UnityExtensions.Editor.Build.WebGL") {
         if (values.Length != 3 || values[0] != "-buildTarget" || values[1] != "WebGL") {
             Console.Error.WriteLine("The WebGL build requires its target and exactly one output path.");
