@@ -7,3 +7,6 @@ $RECYCLE.BIN/
 # .NET build outputs
 **/bin/
 **/obj/
+
+# Rider per-user settings
+*.DotSettings.user
