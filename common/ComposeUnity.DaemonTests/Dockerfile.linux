@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/runtime-deps:9.0-bookworm-slim
+FROM mcr.microsoft.com/dotnet/runtime:9.0-bookworm-slim
 COPY --chmod=755 controller/compose-unity /usr/local/bin/compose-unity-controller
 COPY --chmod=755 backend/compose-unity /usr/local/bin/compose-unity
 RUN ln -s compose-unity /usr/local/bin/composer
