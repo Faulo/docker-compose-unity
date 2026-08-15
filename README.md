@@ -264,6 +264,12 @@ tool_timeout_sec = 7200
 
 The server advertises exactly four tools:
 
+Each tool accepts an absolute project path from the Docker host. A Linux Docker
+Desktop daemon translates ordinary Windows drive paths such as
+`C:\Users\name\project` to its daemon-native bind source. Native Linux paths,
+remote Linux daemons, and Windows-container daemons keep their existing path
+behavior.
+
 - `get_project_info` validates a Docker-host project path and returns its normalized
   root, company, product and editor versions, major code and rendering settings,
   input handling, and complete package manifest by reading the project's YAML

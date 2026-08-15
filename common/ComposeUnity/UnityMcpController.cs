@@ -64,6 +64,7 @@ sealed class UnityMcpController : IAsyncDisposable {
     readonly ConcurrentDictionary<string, Lazy<Task<ValidatedProject>>> projects = new(StringComparer.Ordinal);
     readonly JsonObject self;
     readonly CancellationToken stoppingToken;
+    readonly bool translateWindowsHostPaths;
     readonly bool windowsContainers;
 
     UnityMcpController(
@@ -72,6 +73,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         string controllerId,
         string imageId,
         bool windowsContainers,
+        bool translateWindowsHostPaths,
         CancellationToken stoppingToken) {
         this.docker = docker;
         this.self = self;
@@ -79,6 +81,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         this.imageId = imageId;
         imageHash = Hash(imageId)[..12];
         this.windowsContainers = windowsContainers;
+        this.translateWindowsHostPaths = translateWindowsHostPaths;
         this.stoppingToken = stoppingToken;
     }
 
@@ -129,6 +132,7 @@ sealed class UnityMcpController : IAsyncDisposable {
 
             string daemonOs = version["Os"]?.GetValue<string>()
                               ?? throw new InvalidOperationException("Docker Engine did not report its container operating system.");
+            bool windowsContainers = daemonOs.Equals("windows", StringComparison.OrdinalIgnoreCase);
             var self = await docker.InspectSelfAsync(stoppingToken);
             string controllerId = self["Id"]?.GetValue<string>()
                                   ?? throw new InvalidOperationException("Docker Engine did not report the sidecar container ID.");
@@ -139,7 +143,8 @@ sealed class UnityMcpController : IAsyncDisposable {
                 self,
                 controllerId,
                 imageId,
-                daemonOs.Equals("windows", StringComparison.OrdinalIgnoreCase),
+                windowsContainers,
+                !windowsContainers && IsDockerDesktop(version),
                 stoppingToken);
         } catch {
             await docker.DisposeAsync();
@@ -356,26 +361,30 @@ sealed class UnityMcpController : IAsyncDisposable {
 
     async Task<ValidatedProject> GetProjectAsync(string projectRoot, CancellationToken cancellationToken) {
         if (string.IsNullOrWhiteSpace(projectRoot) || projectRoot.Length > 4096 || projectRoot.Any(char.IsControl)) {
-            throw new ArgumentException("projectRoot must be a non-empty Docker-daemon host path.", nameof(projectRoot));
+            throw new ArgumentException("projectRoot must be a non-empty absolute host path.", nameof(projectRoot));
         }
 
+        string daemonRoot = ResolveDaemonProjectRoot(projectRoot, windowsContainers, translateWindowsHostPaths);
         var lazy = projects.GetOrAdd(
-            projectRoot,
+            daemonRoot,
             value => new Lazy<Task<ValidatedProject>>(
-                () => ProbeProjectAsync(value, stoppingToken),
+                () => ProbeProjectAsync(projectRoot, value, stoppingToken),
                 LazyThreadSafetyMode.ExecutionAndPublication));
         try {
             return await lazy.Value.WaitAsync(cancellationToken);
         } catch {
             if (lazy.IsValueCreated && lazy.Value.IsFaulted) {
-                projects.TryRemove(new KeyValuePair<string, Lazy<Task<ValidatedProject>>>(projectRoot, lazy));
+                projects.TryRemove(new KeyValuePair<string, Lazy<Task<ValidatedProject>>>(daemonRoot, lazy));
             }
 
             throw;
         }
     }
 
-    async Task<ValidatedProject> ProbeProjectAsync(string suppliedRoot, CancellationToken cancellationToken) {
+    async Task<ValidatedProject> ProbeProjectAsync(
+        string suppliedRoot,
+        string daemonRoot,
+        CancellationToken cancellationToken) {
         string name = $"compose-unity-probe-{Guid.NewGuid():N}";
         string? containerId = null;
         try {
@@ -387,7 +396,7 @@ sealed class UnityMcpController : IAsyncDisposable {
                     ["Mounts"] = new JsonArray {
                         new JsonObject {
                             ["Type"] = "bind",
-                            ["Source"] = suppliedRoot,
+                            ["Source"] = daemonRoot,
                             ["Target"] = ProbeProjectRoot,
                             ["ReadOnly"] = true,
                             ["BindOptions"] = new JsonObject { ["CreateMountpoint"] = false }
@@ -734,6 +743,25 @@ sealed class UnityMcpController : IAsyncDisposable {
         && char.IsAsciiLetter(path[0])
         && path[1] == ':'
         && path[2] is '\\' or '/';
+
+    internal static bool IsDockerDesktop(JsonObject version) {
+        string? name = version["Platform"]?["Name"]?.GetValue<string>();
+        return name?.Equals("Docker Desktop", StringComparison.OrdinalIgnoreCase) == true
+               || name?.StartsWith("Docker Desktop ", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    internal static string ResolveDaemonProjectRoot(
+        string path,
+        bool windowsContainers,
+        bool translateWindowsHostPaths) {
+        if (windowsContainers || !translateWindowsHostPaths || !LooksLikeWindowsHostPath(path)) {
+            return path;
+        }
+
+        string root = $"/run/desktop/mnt/host/{char.ToLowerInvariant(path[0])}";
+        string suffix = path[3..].Replace('\\', '/').TrimEnd('/');
+        return suffix.Length == 0 ? root : $"{root}/{suffix}";
+    }
 
     internal static string CombineDaemonPath(string root, string child, bool windowsContainers) =>
         windowsContainers ? Path.Combine(root, child) : root + "/" + child;

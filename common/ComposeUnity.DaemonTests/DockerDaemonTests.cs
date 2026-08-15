@@ -106,8 +106,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         var response = await CallToolAsync("get_project_info", new JsonObject { ["projectRoot"] = project });
         Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
         var result = ToolResult(response);
+        string expectedProjectRoot = ExpectedProjectRoot(project, expectedOs);
         using (Assert.EnterMultipleScope()) {
-            Assert.That(result["projectRoot"]!.GetValue<string>(), Is.EqualTo(project));
+            Assert.That(result["projectRoot"]!.GetValue<string>(), Is.EqualTo(expectedProjectRoot));
             Assert.That(result["projectName"]!.GetValue<string>(), Is.EqualTo("Example Game"));
             Assert.That(result["editor"]!["version"]!.GetValue<string>(), Is.EqualTo("6000.3.13f1"));
             Assert.That(result["rendering"]!["renderPipeline"]!.GetValue<string>(), Is.EqualTo("Universal"));
@@ -171,7 +172,8 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     public async Task ReusesWorkerAndMountsOnlyProjectDirectories() {
         await ExecuteMethodAsync("DaemonTests.First");
         string workerBefore = await SingleWorkerAsync();
-        await ExecuteMethodAsync("DaemonTests.Reuse");
+        string equivalentProjectRoot = ExpectedProjectRoot(project, expectedOs);
+        await ExecuteMethodAsync("DaemonTests.Reuse", equivalentProjectRoot);
         string workerAfter = await SingleWorkerAsync();
         Assert.That(workerAfter, Is.EqualTo(workerBefore), "The retained worker was not reused.");
 
@@ -319,9 +321,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         return JsonNode.Parse(data[0][6..])!;
     }
 
-    async Task ExecuteMethodAsync(string method) {
+    async Task ExecuteMethodAsync(string method, string? projectRoot = null) {
         var response = await CallToolAsync("execute_method", new JsonObject {
-            ["projectRoot"] = project,
+            ["projectRoot"] = projectRoot ?? project,
             ["method"] = method,
             ["arguments"] = new JsonArray()
         });
@@ -380,6 +382,16 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     }
 
     static JsonNode ToolResult(JsonNode response) => response["result"]!["structuredContent"]!["result"]!;
+
+    static string ExpectedProjectRoot(string value, string expectedOs) {
+        if (expectedOs != "linux" || value.Length < 3 || value[1] != ':' || value[2] is not '\\' and not '/') {
+            return value;
+        }
+
+        string suffix = value[3..].Replace('\\', '/').TrimEnd('/');
+        string root = $"/run/desktop/mnt/host/{char.ToLowerInvariant(value[0])}";
+        return suffix.Length == 0 ? root : $"{root}/{suffix}";
+    }
 
     static bool IsLocalEndpoint(string value) => value.StartsWith("npipe://", StringComparison.OrdinalIgnoreCase)
                                                   || value.StartsWith("unix://", StringComparison.OrdinalIgnoreCase);

@@ -86,6 +86,35 @@ public sealed class StateAndConcurrencyTests {
         Assert.That(UnityMcpController.ProjectIdentityPath("/project", false), Is.EqualTo("/project"));
     }
 
+    [TestCase(@"C:\Users\Faulo\Desktop\Unity\Slothsoft.CritterGrove",
+        "/run/desktop/mnt/host/c/Users/Faulo/Desktop/Unity/Slothsoft.CritterGrove")]
+    [TestCase("D:/Projects/Game With Spaces", "/run/desktop/mnt/host/d/Projects/Game With Spaces")]
+    [TestCase(@"E:\", "/run/desktop/mnt/host/e")]
+    public void ResolvesWindowsPathsForDockerDesktopLinux(string value, string expected) =>
+        Assert.That(UnityMcpController.ResolveDaemonProjectRoot(value, false, true), Is.EqualTo(expected));
+
+    [Test]
+    public void PreservesPathsWithoutDockerDesktopLinuxTranslation() {
+        const string windowsPath = @"C:\Projects\Game";
+        const string daemonPath = "/run/desktop/mnt/host/c/Projects/Game";
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(UnityMcpController.ResolveDaemonProjectRoot(daemonPath, false, true), Is.EqualTo(daemonPath));
+            Assert.That(UnityMcpController.ResolveDaemonProjectRoot(windowsPath, true, true), Is.EqualTo(windowsPath));
+            Assert.That(UnityMcpController.ResolveDaemonProjectRoot(windowsPath, false, false), Is.EqualTo(windowsPath));
+        }
+    }
+
+    [TestCase("Docker Desktop 4.86.0 (236216)", true)]
+    [TestCase("docker desktop", true)]
+    [TestCase("Docker Engine - Community", false)]
+    [TestCase("Docker Desktop-Compatible", false)]
+    public void IdentifiesDockerDesktopFromDaemonVersion(string platformName, bool expected) {
+        var version = new JsonObject {
+            ["Platform"] = new JsonObject { ["Name"] = platformName }
+        };
+        Assert.That(UnityMcpController.IsDockerDesktop(version), Is.EqualTo(expected));
+    }
+
     [Test]
     public void CanonicalizesWorkerConfigurationFingerprints() {
         var first = JsonNode.Parse("""{"nested":{"b":2,"a":1},"enabled":true}""")!;

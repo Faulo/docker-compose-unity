@@ -175,7 +175,7 @@ sealed class UnityMcpTools(UnityMcpController controller, IHttpContextAccessor c
     [Description(
         "Read a Docker-host Unity project's YAML and JSON metadata and return its root, product metadata, editor and project versions, major code and rendering settings, input handling, and complete package manifest without installing or launching Unity.")]
     public async Task<object> ProjectInfoAsync(
-        [Description("Docker-daemon host path to an existing Unity project.")]
+        [Description("Absolute host path to an existing Unity project.")]
         string projectRoot,
         CancellationToken cancellationToken) =>
         await InvokeAsync(() => controller.ProjectInfoAsync(projectRoot, cancellationToken));
@@ -190,7 +190,7 @@ sealed class UnityMcpTools(UnityMcpController controller, IHttpContextAccessor c
     [Description(
         "Run Unity Test Runner modes for a Docker-host Unity project. Valid JUnit reports return compact pass/fail counts and failure details; infrastructure errors return the complete ordered Unity log.")]
     public async Task<object> RunTestsAsync(
-        [Description("Docker-daemon host path to an existing Unity project.")]
+        [Description("Absolute host path to an existing Unity project.")]
         string projectRoot,
         [Description("One or more Unity test modes, such as EditMode, PlayMode, or a platform.")]
         string[] modes,
@@ -206,7 +206,7 @@ sealed class UnityMcpTools(UnityMcpController controller, IHttpContextAccessor c
         UseStructuredContent = true)]
     [Description("Run a fully qualified static Unity editor method, ask Unity to quit afterward, and return its exit status and relevant output.")]
     public async Task<object> ExecuteMethodAsync(
-        [Description("Docker-daemon host path to an existing Unity project.")]
+        [Description("Absolute host path to an existing Unity project.")]
         string projectRoot,
         [Description("Fully qualified static Unity editor method name.")]
         string method,
@@ -224,7 +224,7 @@ sealed class UnityMcpTools(UnityMcpController controller, IHttpContextAccessor c
         UseStructuredContent = true)]
     [Description("Build a Docker-host Unity project for WebGL and serve the immutable result from this MCP listener.")]
     public async Task<object> BuildAndServeWebGlAsync(
-        [Description("Docker-daemon host path to an existing Unity project.")]
+        [Description("Absolute host path to an existing Unity project.")]
         string projectRoot,
         CancellationToken cancellationToken) {
         var request = contexts.HttpContext?.Request
