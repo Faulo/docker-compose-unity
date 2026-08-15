@@ -69,7 +69,8 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             await PublishAsync(Path.Combine(repository, "common", "ComposeUnity.DaemonTests.Backend", "ComposeUnity.DaemonTests.Backend.csproj"), runtime, Path.Combine(staging, "backend"));
 
             string dockerfile = Path.Combine(repository, "common", "ComposeUnity.DaemonTests", $"Dockerfile.{expectedOs}");
-            AssertDockerSucceeded(await RunDockerAsync(["build", "--tag", image, "--file", dockerfile, staging], TimeSpan.FromMinutes(5)), "build daemon-test image");
+            File.Copy(dockerfile, Path.Combine(staging, "Dockerfile"));
+            AssertDockerSucceeded(await RunDockerAsync(["build", "--tag", image, staging], TimeSpan.FromMinutes(5)), "build daemon-test image");
             imageBuilt = true;
 
             string dockerMount = expectedOs == "windows"
