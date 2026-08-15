@@ -77,7 +77,19 @@ jobs:
                   throw "Docker did not start with Hyper-V as its default isolation within 60 seconds."
             - name: Register Windows Docker context
               shell: pwsh
-              run: docker context create windows --docker "host=npipe:////./pipe/docker_engine"
+              run: |
+                  $endpoint = docker context inspect --format "{{.Endpoints.docker.Host}}"
+                  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($endpoint)) {
+                      throw "Could not determine the configured Docker endpoint."
+                  }
+                  docker context create windows --docker "host=$($endpoint.Trim())"
+                  if ($LASTEXITCODE -ne 0) {
+                      throw "Could not register the Windows Docker context."
+                  }
+                  $daemonOs = docker --context windows version --format "{{.Server.Os}}"
+                  if ($LASTEXITCODE -ne 0 -or $daemonOs.Trim() -ne "windows") {
+                      throw "The Windows Docker context is not connected to a Windows daemon: $daemonOs"
+                  }
             - name: Run Windows real-daemon tests
               run: dotnet test common/ComposeUnity.DaemonTests/ComposeUnity.DaemonTests.csproj --nologo --configuration Release
               env:
