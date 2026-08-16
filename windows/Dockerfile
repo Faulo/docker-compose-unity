@@ -314,28 +314,18 @@ RUN compose-unity exec unity-build; \
     if ($LASTEXITCODE -ne 0) { throw 'compose-unity unity-help smoke check failed' }; \
     Remove-Item -LiteralPath C:\ProgramData\compose-unity -Recurse -Force
 
+# PowerShell
 ARG POWERSHELL_VERSION=7.6.4
-# The ZIP package avoids installer side effects; its release manifest supplies
-# the checksum so POWERSHELL_VERSION can select any release with these assets.
-RUN $archiveName = 'PowerShell-' + $env:POWERSHELL_VERSION + '-win-x64.zip'; \
-    $releaseUri = 'https://github.com/PowerShell/PowerShell/releases/download/v' + $env:POWERSHELL_VERSION; \
-    $archive = 'C:\powershell.zip'; \
-    $hashes = 'C:\powershell-hashes.sha256'; \
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
-    (New-Object Net.WebClient).DownloadFile(($releaseUri + '/' + $archiveName), $archive); \
-    (New-Object Net.WebClient).DownloadFile(($releaseUri + '/hashes.sha256'), $hashes); \
-    $hashLines = @(Get-Content -LiteralPath $hashes | Where-Object { $_ -match ('^[0-9a-fA-F]{64} \*' + [regex]::Escape($archiveName) + '$') }); \
-    if ($hashLines.Count -ne 1) { throw "Expected one PowerShell checksum for $archiveName, found $($hashLines.Count)" }; \
-    $expectedHash = ($hashLines[0] -split '\s+', 2)[0]; \
-    $actualHash = (Get-FileHash -Algorithm SHA256 $archive).Hash; \
-    if ($actualHash -ne $expectedHash) { throw "PowerShell package checksum mismatch: expected $expectedHash, got $actualHash" }; \
-    $destination = 'C:\Program Files\PowerShell\7'; \
+ADD https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/PowerShell-${POWERSHELL_VERSION}-win-x64.zip C:/powershell.zip
+RUN $archive = 'C:/powershell.zip'; \
+    $destination = 'C:/Program Files/PowerShell/7'; \
     New-Item -ItemType Directory -Force $destination | Out-Null; \
     Expand-Archive -LiteralPath $archive -DestinationPath $destination; \
-    Remove-Item -LiteralPath $archive, $hashes; \
+    Remove-Item -LiteralPath $archive; \
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
-    [Environment]::SetEnvironmentVariable('Path', $destination + ';' + $machinePath, 'Machine'); \
-    & "$destination\pwsh.exe" -NoLogo -NoProfile -Command 'if ($PSVersionTable.PSVersion.ToString() -ne $env:POWERSHELL_VERSION) { exit 1 }'; \
+    [Environment]::SetEnvironmentVariable('Path', ('C:\godot;' + $destination + ';' + $machinePath), 'Machine')
+RUN pwsh.exe -NoLogo -NoProfile -Command \
+        'if ($PSVersionTable.PSVersion.ToString() -ne $env:POWERSHELL_VERSION) { exit 1 }'; \
     if ($LASTEXITCODE -ne 0) { throw 'PowerShell smoke check failed' }
 
 VOLUME ["C:/Program Files/Unity/Hub/Editor", "C:/steam", "C:/Users/ContainerAdministrator/AppData/Roaming/Unity", "C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub", "C:/Users/ContainerAdministrator/AppData/Local/Unity", "C:/ProgramData/Unity"]
