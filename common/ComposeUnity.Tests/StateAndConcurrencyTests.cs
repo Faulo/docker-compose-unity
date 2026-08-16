@@ -90,33 +90,44 @@ public sealed class StateAndConcurrencyTests {
         Assert.That(UnityMcpController.ProjectIdentityPath("/project", false), Is.EqualTo("/project"));
     }
 
-    [TestCase(@"C:\Users\Faulo\Desktop\Unity\Slothsoft.CritterGrove",
-        "/run/desktop/mnt/host/c/Users/Faulo/Desktop/Unity/Slothsoft.CritterGrove")]
-    [TestCase("D:/Projects/Game With Spaces", "/run/desktop/mnt/host/d/Projects/Game With Spaces")]
-    [TestCase(@"E:\", "/run/desktop/mnt/host/e")]
-    public void ResolvesWindowsPathsForDockerDesktopLinux(string value, string expected) =>
-        Assert.That(UnityMcpController.ResolveDaemonProjectRoot(value, false, true), Is.EqualTo(expected));
+    [TestCase(0, @"C:\Users\Faulo\Game", @"C:\Users\Faulo\Game")]
+    [TestCase(1, @"C:\Users\Faulo\Game", "/mnt/c/Users/Faulo/Game")]
+    [TestCase(2, "D:/Projects/Game With Spaces", "/run/desktop/mnt/host/d/Projects/Game With Spaces")]
+    [TestCase(3, @"E:\", "/host_mnt/e")]
+    public void TranslatesWindowsHostPaths(int strategy, string value, string expected) =>
+        Assert.That(UnityMcpController.TranslateWindowsHostPath(value, (EWindowsHostPathStrategy)strategy), Is.EqualTo(expected));
 
     [Test]
-    public void PreservesPathsWithoutDockerDesktopLinuxTranslation() {
-        const string windowsPath = @"C:\Projects\Game";
-        const string daemonPath = "/run/desktop/mnt/host/c/Projects/Game";
+    public void TriesTheLastSuccessfulWindowsHostPathStrategyFirst() {
+        var candidates = UnityMcpController.DaemonProjectRootCandidates(
+            @"C:\Projects\Game",
+            false,
+            EWindowsHostPathStrategy.Wsl);
+
         using (Assert.EnterMultipleScope()) {
-            Assert.That(UnityMcpController.ResolveDaemonProjectRoot(daemonPath, false, true), Is.EqualTo(daemonPath));
-            Assert.That(UnityMcpController.ResolveDaemonProjectRoot(windowsPath, true, true), Is.EqualTo(windowsPath));
-            Assert.That(UnityMcpController.ResolveDaemonProjectRoot(windowsPath, false, false), Is.EqualTo(windowsPath));
+            Assert.That(candidates.Select(candidate => candidate.strategy), Is.EqualTo(new[] {
+                EWindowsHostPathStrategy.Wsl,
+                EWindowsHostPathStrategy.Original,
+                EWindowsHostPathStrategy.DockerDesktop,
+                EWindowsHostPathStrategy.LegacyDesktop
+            }));
+            Assert.That(candidates.Select(candidate => candidate.path), Is.EqualTo(new[] {
+                "/mnt/c/Projects/Game",
+                @"C:\Projects\Game",
+                "/run/desktop/mnt/host/c/Projects/Game",
+                "/host_mnt/c/Projects/Game"
+            }));
         }
     }
 
-    [TestCase("Docker Desktop 4.86.0 (236216)", true)]
-    [TestCase("docker desktop", true)]
-    [TestCase("Docker Engine - Community", false)]
-    [TestCase("Docker Desktop-Compatible", false)]
-    public void IdentifiesDockerDesktopFromDaemonVersion(string platformName, bool expected) {
-        var version = new JsonObject {
-            ["Platform"] = new JsonObject { ["Name"] = platformName }
-        };
-        Assert.That(UnityMcpController.IsDockerDesktop(version), Is.EqualTo(expected));
+    [Test]
+    public void PreservesPathsThatDoNotNeedLinuxHostTranslation() {
+        const string windowsPath = @"C:\Projects\Game";
+        const string linuxPath = "/projects/game";
+        using (Assert.EnterMultipleScope()) {
+            Assert.That(UnityMcpController.DaemonProjectRootCandidates(windowsPath, true, EWindowsHostPathStrategy.Wsl).Single().path, Is.EqualTo(windowsPath));
+            Assert.That(UnityMcpController.DaemonProjectRootCandidates(linuxPath, false, EWindowsHostPathStrategy.Wsl).Single().path, Is.EqualTo(linuxPath));
+        }
     }
 
     [Test]

@@ -117,9 +117,8 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         var response = await CallToolAsync("get_project_info", new JsonObject { ["projectRoot"] = project });
         Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
         var result = ToolResult(response);
-        string expectedProjectRoot = ExpectedProjectRoot(project, expectedOs);
         using (Assert.EnterMultipleScope()) {
-            Assert.That(result["projectRoot"]!.GetValue<string>(), Is.EqualTo(expectedProjectRoot));
+            Assert.That(result["projectRoot"]!.GetValue<string>(), Is.AnyOf(ExpectedProjectRoots(project, expectedOs)));
             Assert.That(result["projectName"]!.GetValue<string>(), Is.EqualTo("Example Game"));
             Assert.That(result["editor"]!["version"]!.GetValue<string>(), Is.EqualTo("6000.3.13f1"));
             Assert.That(result["rendering"]!["renderPipeline"]!.GetValue<string>(), Is.EqualTo("Universal"));
@@ -221,7 +220,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     public async Task ReusesWorkerAndMountsOnlyProjectDirectories() {
         await ExecuteMethodAsync("DaemonTests.First");
         string workerBefore = await SingleWorkerAsync();
-        string equivalentProjectRoot = ExpectedProjectRoot(project, expectedOs);
+        string equivalentProjectRoot = await NormalizedProjectRootAsync();
         await ExecuteMethodAsync("DaemonTests.Reuse", equivalentProjectRoot);
         string workerAfter = await SingleWorkerAsync();
         Assert.That(workerAfter, Is.EqualTo(workerBefore), "The retained worker was not reused.");
@@ -458,14 +457,24 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
 
     static JsonNode ToolResult(JsonNode response) => response["result"]!["structuredContent"]!["result"]!;
 
-    static string ExpectedProjectRoot(string value, string expectedOs) {
+    async Task<string> NormalizedProjectRootAsync() {
+        var response = await CallToolAsync("get_project_info", new JsonObject { ["projectRoot"] = project });
+        Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
+        return ToolResult(response)["projectRoot"]!.GetValue<string>();
+    }
+
+    static string[] ExpectedProjectRoots(string value, string expectedOs) {
         if (expectedOs != "linux" || value.Length < 3 || value[1] != ':' || value[2] is not '\\' and not '/') {
-            return value;
+            return [value];
         }
 
         string suffix = value[3..].Replace('\\', '/').TrimEnd('/');
-        string root = $"/run/desktop/mnt/host/{char.ToLowerInvariant(value[0])}";
-        return suffix.Length == 0 ? root : $"{root}/{suffix}";
+        char drive = char.ToLowerInvariant(value[0]);
+        return [
+            $"/mnt/{drive}/{suffix}".TrimEnd('/'),
+            $"/run/desktop/mnt/host/{drive}/{suffix}".TrimEnd('/'),
+            $"/host_mnt/{drive}/{suffix}".TrimEnd('/')
+        ];
     }
 
     void IgnoreOrFail(string message) {

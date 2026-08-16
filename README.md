@@ -264,11 +264,12 @@ tool_timeout_sec = 7200
 
 The server advertises exactly four tools:
 
-Each tool accepts an absolute project path from the Docker host. A Linux Docker
-Desktop daemon translates ordinary Windows drive paths such as
-`C:\Users\name\project` to its daemon-native bind source. Native Linux paths,
-remote Linux daemons, and Windows-container daemons keep their existing path
-behavior.
+Each tool accepts an absolute project path from the Docker host. When a Linux
+daemon receives an ordinary Windows drive path such as `C:\Users\name\project`,
+the controller probes the standard WSL, current Docker Desktop, and legacy
+desktop mount layouts and remembers the last successful layout for the
+container lifetime. Native Linux paths and Windows-container daemons keep their
+existing path behavior.
 
 `run_tests`, `execute_method`, and `build_and_serve_webgl` can take 30–60
 minutes during a cold editor install or first project import. When the caller

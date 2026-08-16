@@ -11,6 +11,13 @@ using ModelContextProtocol;
 
 namespace ComposeUnity;
 
+enum EWindowsHostPathStrategy {
+    Original,
+    Wsl,
+    DockerDesktop,
+    LegacyDesktop
+}
+
 sealed class UnityMcpController : IAsyncDisposable {
     const string LABEL_PREFIX = "net.slothsoft.compose-unity";
     const string WORKER_CONFIGURATION_LABEL = $"{LABEL_PREFIX}.worker-configuration";
@@ -65,8 +72,8 @@ sealed class UnityMcpController : IAsyncDisposable {
     readonly ConcurrentDictionary<string, Lazy<Task<ValidatedProject>>> projects = new(StringComparer.Ordinal);
     readonly JsonObject self;
     readonly CancellationToken stoppingToken;
-    readonly bool translateWindowsHostPaths;
     readonly bool windowsContainers;
+    int preferredWindowsHostPathStrategy;
 
     UnityMcpController(
         DockerEngineClient docker,
@@ -74,7 +81,6 @@ sealed class UnityMcpController : IAsyncDisposable {
         string controllerId,
         string imageId,
         bool windowsContainers,
-        bool translateWindowsHostPaths,
         CancellationToken stoppingToken) {
         this.docker = docker;
         this.self = self;
@@ -82,7 +88,6 @@ sealed class UnityMcpController : IAsyncDisposable {
         this.imageId = imageId;
         imageHash = Hash(imageId)[..12];
         this.windowsContainers = windowsContainers;
-        this.translateWindowsHostPaths = translateWindowsHostPaths;
         this.stoppingToken = stoppingToken;
     }
 
@@ -145,7 +150,6 @@ sealed class UnityMcpController : IAsyncDisposable {
                 controllerId,
                 imageId,
                 windowsContainers,
-                !windowsContainers && IsDockerDesktop(version),
                 stoppingToken);
         } catch {
             await docker.DisposeAsync();
@@ -443,11 +447,42 @@ sealed class UnityMcpController : IAsyncDisposable {
             throw new ArgumentException("projectRoot must be a non-empty absolute host path.", nameof(projectRoot));
         }
 
-        string daemonRoot = ResolveDaemonProjectRoot(projectRoot, windowsContainers, translateWindowsHostPaths);
+        var candidates = DaemonProjectRootCandidates(
+            projectRoot,
+            windowsContainers,
+            (EWindowsHostPathStrategy)Volatile.Read(ref preferredWindowsHostPathStrategy));
+        var failures = new List<(string path, Exception exception)>();
+        foreach (var candidate in candidates) {
+            try {
+                var project = await GetOrProbeProjectAsync(projectRoot, candidate.path, cancellationToken);
+                if (!windowsContainers && LooksLikeWindowsHostPath(projectRoot)) {
+                    Interlocked.Exchange(ref preferredWindowsHostPathStrategy, (int)candidate.strategy);
+                }
+
+                return project;
+            } catch (Exception exception) when (exception is not OperationCanceledException) {
+                if (candidates.Count == 1) {
+                    throw;
+                }
+
+                failures.Add((candidate.path, exception));
+            }
+        }
+
+        string details = string.Join("; ", failures.Select(failure => $"'{failure.path}': {failure.exception.GetBaseException().Message}"));
+        throw new InvalidOperationException(
+            $"Unity project validation failed for '{projectRoot}' using every supported Linux Docker host path layout. {details}",
+            new AggregateException(failures.Select(failure => failure.exception)));
+    }
+
+    async Task<ValidatedProject> GetOrProbeProjectAsync(
+        string suppliedRoot,
+        string daemonRoot,
+        CancellationToken cancellationToken) {
         var lazy = projects.GetOrAdd(
             daemonRoot,
             value => new Lazy<Task<ValidatedProject>>(
-                () => ProbeProjectAsync(projectRoot, value, stoppingToken),
+                () => ProbeProjectAsync(suppliedRoot, value, stoppingToken),
                 LazyThreadSafetyMode.ExecutionAndPublication));
         try {
             return await lazy.Value.WaitAsync(cancellationToken);
@@ -825,21 +860,35 @@ sealed class UnityMcpController : IAsyncDisposable {
         && path[1] == ':'
         && path[2] is '\\' or '/';
 
-    internal static bool IsDockerDesktop(JsonObject version) {
-        string? name = version["Platform"]?["Name"]?.GetValue<string>();
-        return name?.Equals("Docker Desktop", StringComparison.OrdinalIgnoreCase) == true
-               || name?.StartsWith("Docker Desktop ", StringComparison.OrdinalIgnoreCase) == true;
-    }
-
-    internal static string ResolveDaemonProjectRoot(
+    internal static IReadOnlyList<(EWindowsHostPathStrategy strategy, string path)> DaemonProjectRootCandidates(
         string path,
         bool windowsContainers,
-        bool translateWindowsHostPaths) {
-        if (windowsContainers || !translateWindowsHostPaths || !LooksLikeWindowsHostPath(path)) {
+        EWindowsHostPathStrategy preferredStrategy) {
+        if (windowsContainers || !LooksLikeWindowsHostPath(path)) {
+            return [(EWindowsHostPathStrategy.Original, path)];
+        }
+
+        EWindowsHostPathStrategy[] strategies = Enum.GetValues<EWindowsHostPathStrategy>();
+        if (Enum.IsDefined(preferredStrategy) && preferredStrategy != strategies[0]) {
+            int preferredIndex = Array.IndexOf(strategies, preferredStrategy);
+            (strategies[0], strategies[preferredIndex]) = (strategies[preferredIndex], strategies[0]);
+        }
+
+        return strategies.Select(strategy => (strategy, TranslateWindowsHostPath(path, strategy))).ToArray();
+    }
+
+    internal static string TranslateWindowsHostPath(string path, EWindowsHostPathStrategy strategy) {
+        if (strategy == EWindowsHostPathStrategy.Original) {
             return path;
         }
 
-        string root = $"/run/desktop/mnt/host/{char.ToLowerInvariant(path[0])}";
+        char drive = char.ToLowerInvariant(path[0]);
+        string root = strategy switch {
+            EWindowsHostPathStrategy.Wsl => $"/mnt/{drive}",
+            EWindowsHostPathStrategy.DockerDesktop => $"/run/desktop/mnt/host/{drive}",
+            EWindowsHostPathStrategy.LegacyDesktop => $"/host_mnt/{drive}",
+            _ => throw new ArgumentOutOfRangeException(nameof(strategy), strategy, null)
+        };
         string suffix = path[3..].Replace('\\', '/').TrimEnd('/');
         return suffix.Length == 0 ? root : $"{root}/{suffix}";
     }
