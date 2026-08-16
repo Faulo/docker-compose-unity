@@ -6,9 +6,11 @@ using Microsoft.AspNetCore.StaticFiles;
 namespace ComposeUnity;
 
 static class WebGlHosting {
-    internal static string documentRoot => OperatingSystem.IsWindows()
-        ? @"C:\compose-unity\webgl"
-        : "/compose-unity/webgl";
+    internal static string documentRoot {
+        get => OperatingSystem.IsWindows()
+            ? @"C:\compose-unity\webgl"
+            : "/compose-unity/webgl";
+    }
 
     internal static string ProjectSlug(string? projectName) {
         var result = new StringBuilder();

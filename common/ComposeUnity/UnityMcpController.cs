@@ -609,12 +609,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         var labels = Labels("worker", project);
         labels[$"{LABEL_PREFIX}.image"] = imageId;
         var environment = ForwardedEnvironment();
-        var reuseContract = new JsonObject {
-            ["Image"] = imageId,
-            ["Project"] = project.id,
-            ["Env"] = environment.DeepClone(),
-            ["HostConfig"] = hostConfiguration.DeepClone()
-        };
+        var reuseContract = new JsonObject { ["Image"] = imageId, ["Project"] = project.id, ["Env"] = environment.DeepClone(), ["HostConfig"] = hostConfiguration.DeepClone() };
         labels[WORKER_CONFIGURATION_LABEL] = ConfigurationFingerprint(reuseContract);
         return new JsonObject { ["Image"] = imageId, ["Env"] = environment, ["Labels"] = labels, ["HostConfig"] = hostConfiguration };
     }
@@ -868,7 +863,7 @@ sealed class UnityMcpController : IAsyncDisposable {
             return [(EWindowsHostPathStrategy.ORIGINAL, path)];
         }
 
-        EWindowsHostPathStrategy[] strategies = Enum.GetValues<EWindowsHostPathStrategy>();
+        var strategies = Enum.GetValues<EWindowsHostPathStrategy>();
         if (Enum.IsDefined(preferredStrategy) && preferredStrategy != strategies[0]) {
             int preferredIndex = Array.IndexOf(strategies, preferredStrategy);
             (strategies[0], strategies[preferredIndex]) = (strategies[preferredIndex], strategies[0]);

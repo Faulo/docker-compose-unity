@@ -3,9 +3,7 @@ namespace ComposeUnity.Tests;
 public sealed class WebGlHostingTests {
     [TestCase(@"C:\Windows\Temp\compose-unity-webgl\build-id", "build-id")]
     [TestCase("/tmp/compose-unity-webgl/build-id", "build-id")]
-    public void GetsContainerPathNameAcrossPlatforms(string path, string expected) {
-        Assert.That(UnityMcpController.ContainerPathName(path), Is.EqualTo(expected));
-    }
+    public void GetsContainerPathNameAcrossPlatforms(string path, string expected) => Assert.That(UnityMcpController.ContainerPathName(path), Is.EqualTo(expected));
 
     [Test]
     public void MovesWindowsArchiveDirectoryContentsToBuildRoot() {
@@ -38,9 +36,7 @@ public sealed class WebGlHostingTests {
     [TestCase("  A/B:C  ", "a-b-c")]
     [TestCase("___", "project")]
     [TestCase(null, "project")]
-    public void CreatesReadableSafeProjectSlugs(string? value, string expected) {
-        Assert.That(WebGlHosting.ProjectSlug(value), Is.EqualTo(expected));
-    }
+    public void CreatesReadableSafeProjectSlugs(string? value, string expected) => Assert.That(WebGlHosting.ProjectSlug(value), Is.EqualTo(expected));
 
     [TestCase("game.wasm", "application/wasm")]
     [TestCase("game.wasm.br", "application/wasm")]

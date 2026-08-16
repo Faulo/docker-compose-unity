@@ -105,18 +105,10 @@ public sealed class StateAndConcurrencyTests {
             EWindowsHostPathStrategy.WSL);
 
         using (Assert.EnterMultipleScope()) {
-            Assert.That(candidates.Select(candidate => candidate.strategy), Is.EqualTo(new[] {
-                EWindowsHostPathStrategy.WSL,
-                EWindowsHostPathStrategy.ORIGINAL,
-                EWindowsHostPathStrategy.DOCKER_DESKTOP,
-                EWindowsHostPathStrategy.LEGACY_DESKTOP
-            }));
-            Assert.That(candidates.Select(candidate => candidate.path), Is.EqualTo(new[] {
-                "/mnt/c/Projects/Game",
-                @"C:\Projects\Game",
-                "/run/desktop/mnt/host/c/Projects/Game",
-                "/host_mnt/c/Projects/Game"
-            }));
+            Assert.That(candidates.Select(candidate => candidate.strategy),
+                Is.EqualTo(new[] { EWindowsHostPathStrategy.WSL, EWindowsHostPathStrategy.ORIGINAL, EWindowsHostPathStrategy.DOCKER_DESKTOP, EWindowsHostPathStrategy.LEGACY_DESKTOP }));
+            Assert.That(candidates.Select(candidate => candidate.path),
+                Is.EqualTo(new[] { "/mnt/c/Projects/Game", @"C:\Projects\Game", "/run/desktop/mnt/host/c/Projects/Game", "/host_mnt/c/Projects/Game" }));
         }
     }
 

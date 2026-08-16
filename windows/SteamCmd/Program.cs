@@ -17,7 +17,7 @@ static class Program {
         try {
             Directory.CreateDirectory(STEAM_DIRECTORY);
             using var invocationLock = AcquireInvocationLock();
-            var installed = EnsureSteamCmdInstalled();
+            bool installed = EnsureSteamCmdInstalled();
 
             ConsoleCancelEventHandler keepWrapperAlive = (_, eventArgs) => eventArgs.Cancel = true;
             Console.CancelKeyPress += keepWrapperAlive;
@@ -25,6 +25,7 @@ static class Program {
                 if (installed) {
                     RunSteamCmd(["+quit"]);
                 }
+
                 return RunSteamCmd(args);
             } finally {
                 Console.CancelKeyPress -= keepWrapperAlive;
@@ -36,26 +37,23 @@ static class Program {
     }
 
     static int RunSteamCmd(IEnumerable<string> args) {
-        var startInfo = new ProcessStartInfo(SteamCmdPath) {
-            UseShellExecute = false,
-            WorkingDirectory = Environment.CurrentDirectory
-        };
-        foreach (var argument in args) {
+        var startInfo = new ProcessStartInfo(SteamCmdPath) { UseShellExecute = false, WorkingDirectory = Environment.CurrentDirectory };
+        foreach (string argument in args) {
             startInfo.ArgumentList.Add(argument);
         }
 
         using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Failed to start the SteamCMD installation.");
+                            ?? throw new InvalidOperationException("Failed to start the SteamCMD installation.");
         process.WaitForExit();
-        var exitCode = process.ExitCode;
+        int exitCode = process.ExitCode;
         WaitForSteamCmdChildren();
         return exitCode;
     }
 
     static void WaitForSteamCmdChildren() {
-        var quietChecks = 0;
+        int quietChecks = 0;
         while (quietChecks < 2) {
-            var childFound = false;
+            bool childFound = false;
             foreach (var process in Process.GetProcessesByName("steamcmd")) {
                 using (process) {
                     try {
@@ -69,6 +67,7 @@ static class Program {
                     }
                 }
             }
+
             quietChecks = childFound ? 0 : quietChecks + 1;
             Thread.Sleep(250);
         }
@@ -88,6 +87,7 @@ static class Program {
         if (IsExecutable(SteamCmdPath)) {
             return false;
         }
+
         if (!IsExecutable(INSTALLER_PATH)) {
             throw new InvalidDataException($"SteamCMD installer is missing or invalid: {INSTALLER_PATH}");
         }
@@ -96,7 +96,7 @@ static class Program {
             File.Delete(SteamCmdPath);
         }
 
-        var temporaryPath = Path.Combine(STEAM_DIRECTORY, $".steamcmd-{Guid.NewGuid():N}.tmp");
+        string temporaryPath = Path.Combine(STEAM_DIRECTORY, $".steamcmd-{Guid.NewGuid():N}.tmp");
         try {
             File.Copy(INSTALLER_PATH, temporaryPath);
             File.Move(temporaryPath, SteamCmdPath);

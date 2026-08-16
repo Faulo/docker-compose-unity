@@ -32,8 +32,8 @@ static class Program {
         string? kernelExecutableArgument = null) {
         string path = kernelExecutableArgument
                       ?? (commandLineArguments.Count > 0
-            ? commandLineArguments[0]
-            : processPath ?? "compose-unity");
+                          ? commandLineArguments[0]
+                          : processPath ?? "compose-unity");
         return Path.GetFileNameWithoutExtension(path);
     }
 
@@ -711,14 +711,12 @@ static class UnixProcessTree {
     static extern int kill(int pid, int signal);
 
     internal static ChildProcess Start(ProcessStartInfo composer) {
-        var startInfo = new ProcessStartInfo("/usr/bin/setsid") {
-            UseShellExecute = false,
-            WorkingDirectory = composer.WorkingDirectory
-        };
+        var startInfo = new ProcessStartInfo("/usr/bin/setsid") { UseShellExecute = false, WorkingDirectory = composer.WorkingDirectory };
         startInfo.Environment.Clear();
         foreach (var variable in composer.Environment) {
             startInfo.Environment[variable.Key] = variable.Value;
         }
+
         startInfo.ArgumentList.Add("--wait");
         startInfo.ArgumentList.Add(composer.FileName);
         foreach (string argument in composer.ArgumentList) {

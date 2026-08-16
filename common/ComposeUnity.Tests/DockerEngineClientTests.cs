@@ -7,11 +7,14 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ModelContextProtocol;
 
 namespace ComposeUnity.Tests;
 
 public sealed class DockerEngineClientTests {
-    static string validProject => Path.Combine(AppContext.BaseDirectory, "test-files", "ValidProject");
+    static string validProject {
+        get => Path.Combine(AppContext.BaseDirectory, "test-files", "ValidProject");
+    }
 
     [Test]
     public void RejectsEmptyEndpointNames() {
@@ -80,10 +83,7 @@ public sealed class DockerEngineClientTests {
             _ => FakeDockerResponse.NotFound()
         }));
         await using var client = engine.CreateClient();
-        var configuration = new JsonObject {
-            ["Image"] = "sha256:image",
-            ["Cmd"] = DockerEngineClient.ToArray(["command", "two words"])
-        };
+        var configuration = new JsonObject { ["Image"] = "sha256:image", ["Cmd"] = DockerEngineClient.ToArray(["command", "two words"]) };
 
         string id = await client.CreateContainerAsync("worker name", configuration, CancellationToken.None);
         await client.StartContainerAsync(id, CancellationToken.None);
@@ -122,12 +122,11 @@ public sealed class DockerEngineClientTests {
     [Test]
     public async Task StreamsAndExtractsContainerArchive() {
         using var archive = new MemoryStream();
-        using (var writer = new TarWriter(archive, leaveOpen: true)) {
-            var entry = new PaxTarEntry(TarEntryType.RegularFile, "index.html") {
-                DataStream = new MemoryStream(Encoding.UTF8.GetBytes("webgl fixture"))
-            };
+        using (var writer = new TarWriter(archive, true)) {
+            var entry = new PaxTarEntry(TarEntryType.RegularFile, "index.html") { DataStream = new MemoryStream(Encoding.UTF8.GetBytes("webgl fixture")) };
             writer.WriteEntry(entry);
         }
+
         byte[] bytes = archive.ToArray();
         await using var engine = new FakeDockerEngine((request, _) => Task.FromResult(
             request.path == "/containers/worker/archive?path=%2Ftmp%2Fbuild%2F."
@@ -290,12 +289,7 @@ public sealed class DockerEngineClientTests {
                 }
 
                 if (inspectedName.StartsWith("compose-unity-probe-", StringComparison.Ordinal)) {
-                    var inspected = new JsonObject {
-                        ["Id"] = inspectedName,
-                        ["Mounts"] = new JsonArray {
-                            new JsonObject { ["Source"] = validProject, ["Destination"] = probeRoot }
-                        }
-                    };
+                    var inspected = new JsonObject { ["Id"] = inspectedName, ["Mounts"] = new JsonArray { new JsonObject { ["Source"] = validProject, ["Destination"] = probeRoot } } };
                     return Task.FromResult(FakeDockerResponse.Json(inspected.ToJsonString()));
                 }
 
@@ -380,12 +374,8 @@ public sealed class DockerEngineClientTests {
             Assert.That(workerCreates, Is.EqualTo(2), "A worker with a stale configuration fingerprint should be replaced.");
             Assert.That(workerDeletes, Is.EqualTo(1));
             Assert.That(execCreates, Is.EqualTo(3));
-            Assert.That(progress.Snapshot().Select(value => value.Message), Is.EqualTo(new[] {
-                "Validating Unity project",
-                "Preparing or reusing Unity worker",
-                "Invoking Unity editor method",
-                "Preparing method result"
-            }));
+            Assert.That(progress.Snapshot().Select(value => value.Message),
+                Is.EqualTo(new[] { "Validating Unity project", "Preparing or reusing Unity worker", "Invoking Unity editor method", "Preparing method result" }));
             Assert.That(firstResult["exitStatus"]?.GetValue<int>(), Is.EqualTo(7));
             Assert.That(firstResult["output"]?.GetValue<string>(), Is.EqualTo("method output"));
             Assert.That(firstResult["errorOutput"]?.GetValue<string>(), Is.EqualTo("method warning"));
@@ -396,9 +386,7 @@ public sealed class DockerEngineClientTests {
                 Does.Match("^[0-9a-f]{64}$"));
             Assert.That(workerConfiguration["HostConfig"]?["Memory"]?.GetValue<long>(), Is.EqualTo(1_048_576));
             Assert.That(workerConfiguration["HostConfig"]?["ShmSize"]?.GetValue<long>(), Is.EqualTo(67_108_864));
-            Assert.That(workerEnvironment, Is.EqualTo(new[] {
-                "COMPOSE_UNITY_CALL_TIMEOUT=30", "UNITY_NO_GRAPHICS=1", "DOTNET_GCHeapCount=2"
-            }));
+            Assert.That(workerEnvironment, Is.EqualTo(new[] { "COMPOSE_UNITY_CALL_TIMEOUT=30", "UNITY_NO_GRAPHICS=1", "DOTNET_GCHeapCount=2" }));
             Assert.That(probeMount["ReadOnly"]?.GetValue<bool>(), Is.True);
             Assert.That(probeMount["BindOptions"]?["CreateMountpoint"]?.GetValue<bool>(), Is.False);
             Assert.That(workerMounts, Has.Count.EqualTo(4));
@@ -406,9 +394,8 @@ public sealed class DockerEngineClientTests {
             Assert.That(workerMounts.Any(node => node?["Target"]?.GetValue<string>() == dockerDestination), Is.False);
             Assert.That(workerMounts.Any(node => node?["Target"]?.GetValue<string>() == unityDestination), Is.True);
             Assert.That(execBody["WorkingDir"]?.GetValue<string>(), Is.EqualTo(workerRoot));
-            Assert.That(execBody["Cmd"]?.AsArray().Select(node => node!.GetValue<string>()), Is.EqualTo(new[] {
-                composeExecutable, "exec", "unity-command", "--", "method", workerRoot, "Example.Build", "--", "", "two words", "--"
-            }));
+            Assert.That(execBody["Cmd"]?.AsArray().Select(node => node!.GetValue<string>()),
+                Is.EqualTo(new[] { composeExecutable, "exec", "unity-command", "--", "method", workerRoot, "Example.Build", "--", "", "two words", "--" }));
         });
     }
 
@@ -441,10 +428,10 @@ public sealed class DockerEngineClientTests {
 
 sealed record FakeDockerRequest(string method, string path, string body);
 
-sealed class NoProgress : IProgress<ModelContextProtocol.ProgressNotificationValue> {
+sealed class NoProgress : IProgress<ProgressNotificationValue> {
     internal static NoProgress instance { get; } = new();
 
-    public void Report(ModelContextProtocol.ProgressNotificationValue value) {
+    public void Report(ProgressNotificationValue value) {
     }
 }
 
@@ -462,9 +449,9 @@ sealed record FakeDockerResponse(HttpStatusCode statusCode, string contentType, 
 sealed class FakeDockerEngine : IAsyncDisposable {
     readonly Func<FakeDockerRequest, CancellationToken, Task<FakeDockerResponse>> handler;
     readonly string pipeName = "compose-unity-tests-" + Guid.NewGuid().ToString("N");
+    readonly Task server;
     readonly CancellationTokenSource stopping = new();
     readonly string unixSocketPath = Path.Combine(Path.GetTempPath(), "cu-" + Guid.NewGuid().ToString("N") + ".sock");
-    readonly Task server;
     Socket? listener;
 
     internal FakeDockerEngine(Func<FakeDockerRequest, CancellationToken, Task<FakeDockerResponse>> handler) {

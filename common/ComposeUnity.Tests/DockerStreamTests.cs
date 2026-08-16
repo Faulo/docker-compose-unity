@@ -41,10 +41,10 @@ public sealed class DockerStreamTests {
     [Test]
     public async Task RejectsTruncatedDockerFrame() {
         await using var stream = new MemoryStream();
-        WriteFrame(stream, 1, "short", declaredLength: 10);
+        WriteFrame(stream, 1, "short", 10);
         stream.Position = 0;
 
-        Task<CapturedOutput> readTask = DockerEngineClient.ReadMultiplexedAsync(stream, CancellationToken.None);
+        var readTask = DockerEngineClient.ReadMultiplexedAsync(stream, CancellationToken.None);
         Assert.ThrowsAsync<EndOfStreamException>(async () => await readTask);
     }
 

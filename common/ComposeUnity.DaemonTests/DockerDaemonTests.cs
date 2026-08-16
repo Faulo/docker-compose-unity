@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
@@ -9,25 +10,11 @@ using System.Text.RegularExpressions;
 
 namespace ComposeUnity.DaemonTests;
 
-[Category("DockerDaemon")]
+[NUnit.Framework.Category("DockerDaemon")]
 [TestFixture("linux", "linux")]
 [TestFixture("windows", "windows")]
 [CancelAfter(10 * 60 * 1000)]
 public sealed partial class DockerDaemonTests(string expectedOs, string dockerContext) {
-    const string REQUIRED_OS_ENVIRONMENT = "COMPOSE_UNITY_DAEMON_TEST_REQUIRED_OS";
-    readonly string id = Guid.NewGuid().ToString("N");
-    string repository = string.Empty;
-    string project = string.Empty;
-    string staging = string.Empty;
-    string image = string.Empty;
-    string container = string.Empty;
-    string? controllerId;
-    HttpClient? httpClient;
-    Uri? endpoint;
-    int requestId;
-    bool imageBuilt;
-    bool controllerStarted;
-
     [OneTimeSetUp]
     public async Task SetUpDaemonAsync() {
         string? requiredOs = Environment.GetEnvironmentVariable(REQUIRED_OS_ENVIRONMENT);
@@ -77,11 +64,17 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
                 ? WindowsDockerMount(contextEndpoint)
                 : "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock";
             var runArguments = new List<string> {
-                "run", "--detach", "--name", container, "--env", "COMPOSE_UNITY_MCP=1"
+                "run",
+                "--detach",
+                "--name",
+                container,
+                "--env",
+                "COMPOSE_UNITY_MCP=1"
             };
             if (expectedOs == "linux") {
                 runArguments.AddRange(["--publish", "127.0.0.1::8080"]);
             }
+
             runArguments.AddRange(["--mount", dockerMount, image]);
             AssertDockerSucceeded(await RunDockerAsync(runArguments, TimeSpan.FromMinutes(1)), "start daemon-test controller");
             controllerStarted = true;
@@ -102,6 +95,20 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         httpClient?.Dispose();
         await CleanupAsync();
     }
+
+    const string REQUIRED_OS_ENVIRONMENT = "COMPOSE_UNITY_DAEMON_TEST_REQUIRED_OS";
+    readonly string id = Guid.NewGuid().ToString("N");
+    string repository = string.Empty;
+    string project = string.Empty;
+    string staging = string.Empty;
+    string image = string.Empty;
+    string container = string.Empty;
+    string? controllerId;
+    HttpClient? httpClient;
+    Uri? endpoint;
+    int requestId;
+    bool imageBuilt;
+    bool controllerStarted;
 
     [Test]
     public async Task AdvertisesToolsAndReportsProjectInformation() {
@@ -129,11 +136,8 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     [Test]
     public async Task PreservesMethodArgumentsOutputAndExitStatus() {
         string[] arguments = [string.Empty, "two words", "--", "\"quoted\""];
-        var response = await CallToolAsync("execute_method", new JsonObject {
-            ["projectRoot"] = project,
-            ["method"] = "DaemonTests.Arguments",
-            ["arguments"] = new JsonArray(arguments.Select(argument => JsonValue.Create(argument)).ToArray())
-        });
+        var response = await CallToolAsync("execute_method",
+            new JsonObject { ["projectRoot"] = project, ["method"] = "DaemonTests.Arguments", ["arguments"] = new JsonArray(arguments.Select(argument => JsonValue.Create(argument)).ToArray()) });
         Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
         var result = ToolResult(response);
         var backend = JsonNode.Parse(result["output"]!.GetValue<string>())!;
@@ -148,16 +152,13 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     [Test]
     public async Task StreamsCorrelatedProgressBeforeTheFinalToolResult() {
         string progressToken = $"daemon-progress-{expectedOs}";
-        var events = await InvokeMcpEventsAsync("tools/call", new JsonObject {
-            ["name"] = "execute_method",
-            ["arguments"] = new JsonObject {
-                ["projectRoot"] = project,
-                ["method"] = "DaemonTests.Progress",
-                ["arguments"] = new JsonArray()
-            },
-            ["_meta"] = new JsonObject { ["progressToken"] = progressToken }
-        });
-        JsonNode[] notifications = events
+        var events = await InvokeMcpEventsAsync("tools/call",
+            new JsonObject {
+                ["name"] = "execute_method",
+                ["arguments"] = new JsonObject { ["projectRoot"] = project, ["method"] = "DaemonTests.Progress", ["arguments"] = new JsonArray() },
+                ["_meta"] = new JsonObject { ["progressToken"] = progressToken }
+            });
+        var notifications = events
             .Where(item => item["method"]?.GetValue<string>() == "notifications/progress")
             .ToArray();
         int finalIndex = events.FindIndex(item => item["id"] is not null);
@@ -173,7 +174,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             Assert.That(notifications.All(item => item["params"]!["total"] is null), Is.True);
         }
 
-        JsonNode response = events[finalIndex];
+        var response = events[finalIndex];
         Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
         var result = ToolResult(response);
         using (Assert.EnterMultipleScope()) {
@@ -232,7 +233,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         string[] destinations = mounts.Select(mount => mount!["Destination"]!.GetValue<string>()).ToArray();
         int projectMounts = destinations.Count(destination => ProjectDirectoryRegex().IsMatch(destination));
         int dockerMounts = destinations.Count(destination => destination.Equals("/var/run/docker.sock", StringComparison.Ordinal)
-                                                               || destination.Equals(@"\\.\pipe\docker_engine", StringComparison.OrdinalIgnoreCase));
+                                                             || destination.Equals(@"\\.\pipe\docker_engine", StringComparison.OrdinalIgnoreCase));
         using (Assert.EnterMultipleScope()) {
             Assert.That(projectMounts, Is.EqualTo(3));
             Assert.That(dockerMounts, Is.Zero, "The worker must not receive the controller's Docker endpoint.");
@@ -242,10 +243,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
 
     [Test]
     public async Task ParsesTestResultsFromWorker() {
-        var response = await CallToolAsync("run_tests", new JsonObject {
-            ["projectRoot"] = project,
-            ["modes"] = new JsonArray("EditMode", "Play Mode")
-        });
+        var response = await CallToolAsync("run_tests", new JsonObject { ["projectRoot"] = project, ["modes"] = new JsonArray("EditMode", "Play Mode") });
         Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
         var result = ToolResult(response);
         using (Assert.EnterMultipleScope()) {
@@ -313,9 +311,11 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             if (health == "healthy") {
                 return;
             }
+
             if (health is "unhealthy" or "exited" or "dead") {
                 throw new InvalidOperationException($"Daemon-test controller became {health}.\n{await ControllerLogsAsync()}");
             }
+
             await Task.Delay(250);
         }
 
@@ -331,7 +331,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
                     var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
                     try {
                         await socket.ConnectAsync(IPAddress.Parse(address), context.DnsEndPoint.Port, cancellationToken);
-                        return new NetworkStream(socket, ownsSocket: true);
+                        return new NetworkStream(socket, true);
                     } catch {
                         socket.Dispose();
                         throw;
@@ -353,11 +353,8 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     }
 
     async Task InitializeMcpAsync() {
-        var response = await InvokeMcpAsync("initialize", new JsonObject {
-            ["protocolVersion"] = "2025-06-18",
-            ["capabilities"] = new JsonObject(),
-            ["clientInfo"] = new JsonObject { ["name"] = "compose-unity-daemon-tests", ["version"] = "1" }
-        });
+        var response = await InvokeMcpAsync("initialize",
+            new JsonObject { ["protocolVersion"] = "2025-06-18", ["capabilities"] = new JsonObject(), ["clientInfo"] = new JsonObject { ["name"] = "compose-unity-daemon-tests", ["version"] = "1" } });
         Assert.That(response["result"]!["serverInfo"]!["name"]!.GetValue<string>(), Is.EqualTo("compose-unity"));
     }
 
@@ -371,15 +368,8 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     }
 
     async Task<List<JsonNode>> InvokeMcpEventsAsync(string method, JsonObject parameters) {
-        var body = new JsonObject {
-            ["jsonrpc"] = "2.0",
-            ["id"] = Interlocked.Increment(ref requestId),
-            ["method"] = method,
-            ["params"] = parameters
-        };
-        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) {
-            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json")
-        };
+        var body = new JsonObject { ["jsonrpc"] = "2.0", ["id"] = Interlocked.Increment(ref requestId), ["method"] = method, ["params"] = parameters };
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
         using var response = await httpClient!.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync();
@@ -396,11 +386,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     }
 
     async Task ExecuteMethodAsync(string method, string? projectRoot = null) {
-        var response = await CallToolAsync("execute_method", new JsonObject {
-            ["projectRoot"] = projectRoot ?? project,
-            ["method"] = method,
-            ["arguments"] = new JsonArray()
-        });
+        var response = await CallToolAsync("execute_method", new JsonObject { ["projectRoot"] = projectRoot ?? project, ["method"] = method, ["arguments"] = new JsonArray() });
         Assert.That(response["result"]!["isError"]?.GetValue<bool>(), Is.Not.True, response.ToJsonString());
     }
 
@@ -436,14 +422,17 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
                 await RunDockerAsync(["rm", "--force", ownedContainer], TimeSpan.FromSeconds(30));
             }
         }
+
         if (controllerStarted) {
             await RunDockerAsync(["rm", "--force", container], TimeSpan.FromSeconds(30));
             controllerStarted = false;
         }
+
         if (imageBuilt) {
             await RunDockerAsync(["image", "rm", "--force", image], TimeSpan.FromSeconds(30));
             imageBuilt = false;
         }
+
         if (staging.Length > 0 && Directory.Exists(staging)) {
             string temporaryRoot = Path.GetFullPath(Path.GetTempPath());
             string fullStaging = Path.GetFullPath(staging);
@@ -451,6 +440,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
                 || !Path.GetFileName(fullStaging).StartsWith("compose-unity-daemon-tests-", StringComparison.Ordinal)) {
                 throw new InvalidOperationException($"Refusing to remove unexpected staging directory: {fullStaging}");
             }
+
             Directory.Delete(fullStaging, true);
         }
     }
@@ -486,7 +476,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     }
 
     static bool IsLocalEndpoint(string value) => value.StartsWith("npipe://", StringComparison.OrdinalIgnoreCase)
-                                                  || value.StartsWith("unix://", StringComparison.OrdinalIgnoreCase);
+                                                 || value.StartsWith("unix://", StringComparison.OrdinalIgnoreCase);
 
     static string WindowsDockerMount(string endpoint) {
         var match = WindowsPipeRegex().Match(endpoint);
@@ -499,6 +489,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "docker-compose-unity.sln"))) {
             directory = directory.Parent;
         }
+
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 
@@ -514,12 +505,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
     static string[] Lines(string value) => value.Split(['\r', '\n'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
     static async Task<ProcessResult> RunAsync(string executable, IReadOnlyList<string> arguments, TimeSpan timeout) {
-        var startInfo = new ProcessStartInfo(executable) {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var startInfo = new ProcessStartInfo(executable) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         foreach (string argument in arguments) {
             startInfo.ArgumentList.Add(argument);
         }
@@ -529,6 +515,7 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             if (process is null) {
                 return new ProcessResult(-1, string.Empty, $"Could not start {executable}.");
             }
+
             var standardOutput = process.StandardOutput.ReadToEndAsync();
             var standardError = process.StandardError.ReadToEndAsync();
             using var cancellation = new CancellationTokenSource(timeout);
@@ -539,8 +526,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
                 await process.WaitForExitAsync();
                 return new ProcessResult(-1, await standardOutput, $"Timed out after {timeout}.\n{await standardError}");
             }
+
             return new ProcessResult(process.ExitCode, await standardOutput, await standardError);
-        } catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or FileNotFoundException) {
+        } catch (Exception exception) when (exception is Win32Exception or FileNotFoundException) {
             return new ProcessResult(-1, string.Empty, exception.Message);
         }
     }

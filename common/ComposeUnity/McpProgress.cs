@@ -1,5 +1,5 @@
-using System.Globalization;
 using System.Diagnostics;
+using System.Globalization;
 using ModelContextProtocol;
 
 namespace ComposeUnity;
@@ -75,7 +75,7 @@ sealed class UnityMcpProgress : IAsyncDisposable {
     }
 
     async Task RunHeartbeatAsync() {
-        TimeSpan nextDelay = heartbeatInterval;
+        var nextDelay = heartbeatInterval;
         while (true) {
             await delay(nextDelay, stopping.Token);
             lock (gate) {
@@ -83,8 +83,8 @@ sealed class UnityMcpProgress : IAsyncDisposable {
                     return;
                 }
 
-                TimeSpan now = elapsed();
-                TimeSpan quiet = now - lastReport;
+                var now = elapsed();
+                var quiet = now - lastReport;
                 if (phase is null || quiet < heartbeatInterval) {
                     nextDelay = phase is null ? heartbeatInterval : heartbeatInterval - quiet;
                     continue;
@@ -98,10 +98,7 @@ sealed class UnityMcpProgress : IAsyncDisposable {
     }
 
     void ReportLocked(string message) =>
-        destination.Report(new ProgressNotificationValue {
-            Progress = ++sequence,
-            Message = message
-        });
+        destination.Report(new ProgressNotificationValue { Progress = ++sequence, Message = message });
 
     internal static string FormatElapsed(TimeSpan elapsed) {
         if (elapsed < TimeSpan.Zero) {

@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Reflection;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
@@ -10,8 +9,8 @@ public sealed class McpProgressTests {
     [TestCase(nameof(UnityMcpTools.ExecuteMethodAsync), new[] { "projectRoot", "method", "arguments" })]
     [TestCase(nameof(UnityMcpTools.BuildAndServeWebGlAsync), new[] { "projectRoot" })]
     public void ProgressReporterIsInjectedWithoutChangingToolSchema(string methodName, string[] expectedProperties) {
-        MethodInfo method = typeof(UnityMcpTools).GetMethod(methodName)
-                            ?? throw new InvalidOperationException($"Could not find {methodName}.");
+        var method = typeof(UnityMcpTools).GetMethod(methodName)
+                     ?? throw new InvalidOperationException($"Could not find {methodName}.");
         var target = new UnityMcpTools(null!, null!);
         var tool = McpServerTool.Create(method, target);
 
@@ -19,7 +18,7 @@ public sealed class McpProgressTests {
             .EnumerateObject()
             .Select(property => property.Name)
             .ToArray();
-        ParameterInfo[] progressParameters = method.GetParameters()
+        var progressParameters = method.GetParameters()
             .Where(parameter => parameter.ParameterType == typeof(IProgress<ProgressNotificationValue>))
             .ToArray();
 
@@ -32,8 +31,8 @@ public sealed class McpProgressTests {
 
     [Test]
     public void ProjectInformationDoesNotAcceptProgress() {
-        MethodInfo method = typeof(UnityMcpTools).GetMethod(nameof(UnityMcpTools.ProjectInfoAsync))
-                            ?? throw new InvalidOperationException("Could not find ProjectInfoAsync.");
+        var method = typeof(UnityMcpTools).GetMethod(nameof(UnityMcpTools.ProjectInfoAsync))
+                     ?? throw new InvalidOperationException("Could not find ProjectInfoAsync.");
 
         Assert.That(
             method.GetParameters().Any(parameter => parameter.ParameterType == typeof(IProgress<ProgressNotificationValue>)),
@@ -49,12 +48,9 @@ public sealed class McpProgressTests {
             progress.ReportPhase("Preparing or reusing Unity worker");
         }
 
-        ProgressNotificationValue[] values = destination.Snapshot();
+        var values = destination.Snapshot();
         using (Assert.EnterMultipleScope()) {
-            Assert.That(values.Select(value => value.Message), Is.EqualTo(new[] {
-                "Validating Unity project",
-                "Preparing or reusing Unity worker"
-            }));
+            Assert.That(values.Select(value => value.Message), Is.EqualTo(new[] { "Validating Unity project", "Preparing or reusing Unity worker" }));
             Assert.That(values.Select(value => value.Progress), Is.EqualTo(new[] { 1F, 2F }));
             Assert.That(values.Select(value => value.Total), Is.All.Null);
         }
@@ -82,7 +78,7 @@ public sealed class McpProgressTests {
         await timer.AdvanceNextDelayAsync(TimeSpan.FromSeconds(30));
         await destination.WaitForCountAsync(3);
 
-        ProgressNotificationValue heartbeat = destination.Snapshot()[2];
+        var heartbeat = destination.Snapshot()[2];
         using (Assert.EnterMultipleScope()) {
             Assert.That(heartbeat.Progress, Is.EqualTo(3F));
             Assert.That(heartbeat.Total, Is.Null);
@@ -166,8 +162,8 @@ sealed class ManualProgressTimer {
     }
 
     sealed class DelayRequest {
-        readonly CancellationTokenRegistration registration;
         readonly TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        readonly CancellationTokenRegistration registration;
 
         internal DelayRequest(TimeSpan delay, CancellationToken cancellationToken) {
             _ = delay;
