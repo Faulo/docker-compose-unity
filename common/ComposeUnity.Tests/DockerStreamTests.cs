@@ -44,8 +44,8 @@ public sealed class DockerStreamTests {
         WriteFrame(stream, 1, "short", declaredLength: 10);
         stream.Position = 0;
 
-        Assert.ThrowsAsync<EndOfStreamException>(async () =>
-            await DockerEngineClient.ReadMultiplexedAsync(stream, CancellationToken.None));
+        Task<CapturedOutput> readTask = DockerEngineClient.ReadMultiplexedAsync(stream, CancellationToken.None);
+        Assert.ThrowsAsync<EndOfStreamException>(async () => await readTask);
     }
 
     static void WriteFrame(Stream stream, byte streamType, string value, int? declaredLength = null) {

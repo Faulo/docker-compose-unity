@@ -5,7 +5,7 @@ using ModelContextProtocol;
 namespace ComposeUnity;
 
 sealed class UnityMcpProgress : IAsyncDisposable {
-    internal static readonly TimeSpan DefaultHeartbeatInterval = TimeSpan.FromMinutes(1);
+    internal static readonly TimeSpan defaultHeartbeatInterval = TimeSpan.FromMinutes(1);
 
     readonly Func<TimeSpan, CancellationToken, Task> delay;
     readonly IProgress<ProgressNotificationValue> destination;
@@ -26,7 +26,7 @@ sealed class UnityMcpProgress : IAsyncDisposable {
         Func<TimeSpan>? elapsed = null,
         Func<TimeSpan, CancellationToken, Task>? delay = null) {
         this.destination = destination;
-        this.heartbeatInterval = heartbeatInterval ?? DefaultHeartbeatInterval;
+        this.heartbeatInterval = heartbeatInterval ?? defaultHeartbeatInterval;
         if (this.heartbeatInterval <= TimeSpan.Zero) {
             throw new ArgumentOutOfRangeException(nameof(heartbeatInterval), "The heartbeat interval must be positive.");
         }

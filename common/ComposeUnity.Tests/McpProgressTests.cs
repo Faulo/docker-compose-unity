@@ -151,11 +151,11 @@ sealed class ManualProgressTimer {
         return request.task;
     }
 
-    internal async Task AdvanceNextDelayAsync(TimeSpan elapsed) {
+    internal async Task AdvanceNextDelayAsync(TimeSpan elapsedBy) {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await scheduled.WaitAsync(timeout.Token);
         Assert.That(requests.TryDequeue(out var request), Is.True);
-        this.elapsed += elapsed;
+        elapsed += elapsedBy;
         request!.Complete();
     }
 

@@ -12,7 +12,7 @@ namespace ComposeUnity;
 sealed class DockerEngineClient : IAsyncDisposable {
     const string DEFAULT_UNIX_SOCKET_PATH = "/var/run/docker.sock";
     const string DEFAULT_WINDOWS_PIPE_NAME = "docker_engine";
-    static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    static readonly JsonSerializerOptions jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     readonly HttpClient client;
     readonly string unixSocketPath;
@@ -217,7 +217,7 @@ sealed class DockerEngineClient : IAsyncDisposable {
     static HttpRequestMessage CreateRequest(HttpMethod method, string path, JsonObject? body) {
         var request = new HttpRequestMessage(method, path);
         if (body is not null) {
-            request.Content = new StringContent(body.ToJsonString(JsonOptions), Encoding.UTF8, "application/json");
+            request.Content = new StringContent(body.ToJsonString(jsonOptions), Encoding.UTF8, "application/json");
         }
 
         return request;

@@ -8,7 +8,7 @@ namespace ComposeUnity;
 
 static class Program {
     const long DEFAULT_TIMEOUT_SECONDS = 86_400;
-    static readonly TimeSpan TerminationGracePeriod = TimeSpan.FromSeconds(10);
+    static readonly TimeSpan terminationGracePeriod = TimeSpan.FromSeconds(10);
 
     public static async Task<int> Main(string[] args) {
         string executable = ResolveExecutable(
@@ -115,13 +115,13 @@ static class Program {
 
             if (completed == timeoutTask) {
                 store.WriteEvent(LifecycleEvent.Finish("TIMEOUT", record, 124));
-                await child.TerminateAsync(TerminationGracePeriod);
+                await child.TerminateAsync(terminationGracePeriod);
                 return 124;
             }
 
             if (completed == cancellationTask) {
                 store.WriteEvent(LifecycleEvent.Finish("CANCELLED", record, 130));
-                await child.TerminateAsync(TerminationGracePeriod);
+                await child.TerminateAsync(terminationGracePeriod);
                 return 130;
             }
 
@@ -214,7 +214,7 @@ static class Program {
             foreach (var record in store.ReadActive()) {
                 if (record.rootProcess.IsAlive()) {
                     WriteLifecycleEvent(LifecycleEvent.Finish("CANCELLED", record, 130, "sidecar stopping"));
-                    await ProcessTree.TerminateRecordAsync(record, TerminationGracePeriod);
+                    await ProcessTree.TerminateRecordAsync(record, terminationGracePeriod);
                 }
 
                 store.RemoveActive(record.id);
@@ -275,7 +275,7 @@ static class Program {
 
         WriteLifecycleEvent(LifecycleEvent.Finish("ORPHANED", record, null, "launcher disappeared"));
         if (record.rootProcess.IsAlive()) {
-            await ProcessTree.TerminateRecordAsync(record, TerminationGracePeriod);
+            await ProcessTree.TerminateRecordAsync(record, terminationGracePeriod);
         }
 
         store.RemoveActive(record.id);
@@ -452,7 +452,7 @@ static class CommandRouter {
 }
 
 sealed class StateStore {
-    static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    static readonly JsonSerializerOptions jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     readonly string activeDirectory;
     readonly string eventDirectory;
     readonly string readyPath;
@@ -529,7 +529,7 @@ sealed class StateStore {
 
     static T? Read<T>(string path) {
         try {
-            return JsonSerializer.Deserialize<T>(File.ReadAllText(path), JsonOptions);
+            return JsonSerializer.Deserialize<T>(File.ReadAllText(path), jsonOptions);
         } catch {
             return default;
         }
@@ -537,7 +537,7 @@ sealed class StateStore {
 
     static void WriteAtomic<T>(string path, T value) {
         string temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        File.WriteAllText(temporaryPath, JsonSerializer.Serialize(value, JsonOptions));
+        File.WriteAllText(temporaryPath, JsonSerializer.Serialize(value, jsonOptions));
         File.Move(temporaryPath, path, true);
     }
 

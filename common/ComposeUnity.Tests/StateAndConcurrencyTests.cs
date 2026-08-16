@@ -102,14 +102,14 @@ public sealed class StateAndConcurrencyTests {
         var candidates = UnityMcpController.DaemonProjectRootCandidates(
             @"C:\Projects\Game",
             false,
-            EWindowsHostPathStrategy.Wsl);
+            EWindowsHostPathStrategy.WSL);
 
         using (Assert.EnterMultipleScope()) {
             Assert.That(candidates.Select(candidate => candidate.strategy), Is.EqualTo(new[] {
-                EWindowsHostPathStrategy.Wsl,
-                EWindowsHostPathStrategy.Original,
-                EWindowsHostPathStrategy.DockerDesktop,
-                EWindowsHostPathStrategy.LegacyDesktop
+                EWindowsHostPathStrategy.WSL,
+                EWindowsHostPathStrategy.ORIGINAL,
+                EWindowsHostPathStrategy.DOCKER_DESKTOP,
+                EWindowsHostPathStrategy.LEGACY_DESKTOP
             }));
             Assert.That(candidates.Select(candidate => candidate.path), Is.EqualTo(new[] {
                 "/mnt/c/Projects/Game",
@@ -125,8 +125,8 @@ public sealed class StateAndConcurrencyTests {
         const string windowsPath = @"C:\Projects\Game";
         const string linuxPath = "/projects/game";
         using (Assert.EnterMultipleScope()) {
-            Assert.That(UnityMcpController.DaemonProjectRootCandidates(windowsPath, true, EWindowsHostPathStrategy.Wsl).Single().path, Is.EqualTo(windowsPath));
-            Assert.That(UnityMcpController.DaemonProjectRootCandidates(linuxPath, false, EWindowsHostPathStrategy.Wsl).Single().path, Is.EqualTo(linuxPath));
+            Assert.That(UnityMcpController.DaemonProjectRootCandidates(windowsPath, true, EWindowsHostPathStrategy.WSL).Single().path, Is.EqualTo(windowsPath));
+            Assert.That(UnityMcpController.DaemonProjectRootCandidates(linuxPath, false, EWindowsHostPathStrategy.WSL).Single().path, Is.EqualTo(linuxPath));
         }
     }
 

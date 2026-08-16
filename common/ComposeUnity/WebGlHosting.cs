@@ -38,10 +38,10 @@ static class WebGlHosting {
     }
 
     internal static async Task<WebGlBuildDirectory> ClaimBuildDirectoryAsync(
-        string documentRoot,
+        string documentRootPath,
         string projectSlug,
         CancellationToken cancellationToken) {
-        string projectDirectory = Path.Combine(documentRoot, projectSlug);
+        string projectDirectory = Path.Combine(documentRootPath, projectSlug);
         Directory.CreateDirectory(projectDirectory);
         while (true) {
             var now = DateTimeOffset.UtcNow;

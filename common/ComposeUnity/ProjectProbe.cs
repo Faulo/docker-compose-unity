@@ -6,11 +6,11 @@ using System.Text.Json.Nodes;
 namespace ComposeUnity;
 
 static class ProjectProbe {
-    static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    static readonly JsonSerializerOptions jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     internal static int Run(string projectRoot) {
         try {
-            Console.WriteLine(JsonSerializer.Serialize(Read(projectRoot), JsonOptions));
+            Console.WriteLine(JsonSerializer.Serialize(Read(projectRoot), jsonOptions));
             return 0;
         } catch (Exception exception) {
             Console.Error.WriteLine($"compose-unity-sidecar: {exception.Message}");

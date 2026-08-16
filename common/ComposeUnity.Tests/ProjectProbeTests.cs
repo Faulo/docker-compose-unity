@@ -3,13 +3,13 @@ using System.Text.Json.Nodes;
 namespace ComposeUnity.Tests;
 
 public sealed class ProjectProbeTests {
-    static string ValidProject {
+    static string validProject {
         get => Path.Combine(AppContext.BaseDirectory, "test-files", "ValidProject");
     }
 
     [Test]
     public void ReadsCompleteUnityProject() {
-        var result = ProjectProbe.Read(ValidProject);
+        var result = ProjectProbe.Read(validProject);
 
         Assert.That(result.companyName, Is.EqualTo("Example Company"));
         Assert.That(result.projectName, Is.EqualTo("Example Game"));
@@ -30,7 +30,7 @@ public sealed class ProjectProbeTests {
 
     [Test]
     public void ReportsUnknownWhenGraphicsSettingsIsOptionalAndMissing() {
-        using var project = TemporaryProject.CopyOf(ValidProject);
+        using var project = TemporaryProject.CopyOf(validProject);
         File.Delete(Path.Combine(project.path, "ProjectSettings", "GraphicsSettings.asset"));
 
         Assert.That(ProjectProbe.Read(project.path).renderPipeline, Is.EqualTo("Unknown"));
@@ -50,9 +50,9 @@ public sealed class ProjectProbeTests {
 
     [Test]
     public void PreservesCompleteManifest() {
-        var expected = JsonNode.Parse(File.ReadAllText(Path.Combine(ValidProject, "Packages", "manifest.json")))!.AsObject();
+        var expected = JsonNode.Parse(File.ReadAllText(Path.Combine(validProject, "Packages", "manifest.json")))!.AsObject();
 
-        Assert.That(JsonNode.DeepEquals(expected, ProjectProbe.Read(ValidProject).packages), Is.True);
+        Assert.That(JsonNode.DeepEquals(expected, ProjectProbe.Read(validProject).packages), Is.True);
     }
 
     sealed class TemporaryProject : IDisposable {

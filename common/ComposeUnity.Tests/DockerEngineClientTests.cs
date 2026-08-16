@@ -11,7 +11,7 @@ using System.Text.Json.Nodes;
 namespace ComposeUnity.Tests;
 
 public sealed class DockerEngineClientTests {
-    static string ValidProject => Path.Combine(AppContext.BaseDirectory, "test-files", "ValidProject");
+    static string validProject => Path.Combine(AppContext.BaseDirectory, "test-files", "ValidProject");
 
     [Test]
     public void RejectsEmptyEndpointNames() {
@@ -238,7 +238,7 @@ public sealed class DockerEngineClientTests {
         int execCreates = 0;
         JsonObject? probeConfiguration = null;
         JsonObject? workerConfiguration = null;
-        string probeOutput = JsonSerializer.Serialize(ProjectProbe.Read(ValidProject));
+        string probeOutput = JsonSerializer.Serialize(ProjectProbe.Read(validProject));
 
         await using var engine = new FakeDockerEngine((request, cancellationToken) => {
             _ = cancellationToken;
@@ -293,7 +293,7 @@ public sealed class DockerEngineClientTests {
                     var inspected = new JsonObject {
                         ["Id"] = inspectedName,
                         ["Mounts"] = new JsonArray {
-                            new JsonObject { ["Source"] = ValidProject, ["Destination"] = probeRoot }
+                            new JsonObject { ["Source"] = validProject, ["Destination"] = probeRoot }
                         }
                     };
                     return Task.FromResult(FakeDockerResponse.Json(inspected.ToJsonString()));
@@ -357,12 +357,12 @@ public sealed class DockerEngineClientTests {
         await using var controller = await engine.CreateControllerAsync(CancellationToken.None);
 
         var progress = new RecordingProgress();
-        object first = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["", "two words", "--"], progress, CancellationToken.None);
-        object second = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["again"], NoProgress.Instance, CancellationToken.None);
+        object first = await controller.ExecuteMethodAsync(validProject, "Example.Build", ["", "two words", "--"], progress, CancellationToken.None);
+        object second = await controller.ExecuteMethodAsync(validProject, "Example.Build", ["again"], NoProgress.instance, CancellationToken.None);
         int workerCreatesAfterReuse = workerCreates;
         string workerName = configurations.Keys.Single(name => name.StartsWith("compose-unity-worker-", StringComparison.Ordinal));
         configurations[workerName]["Labels"]!["net.slothsoft.compose-unity.worker-configuration"] = "stale";
-        object third = await controller.ExecuteMethodAsync(ValidProject, "Example.Build", ["after-change"], NoProgress.Instance, CancellationToken.None);
+        object third = await controller.ExecuteMethodAsync(validProject, "Example.Build", ["after-change"], NoProgress.instance, CancellationToken.None);
 
         var firstResult = JsonNode.Parse(JsonSerializer.Serialize(first))!.AsObject();
         var probeMount = probeConfiguration!["HostConfig"]!["Mounts"]![0]!;
@@ -442,7 +442,7 @@ public sealed class DockerEngineClientTests {
 sealed record FakeDockerRequest(string method, string path, string body);
 
 sealed class NoProgress : IProgress<ModelContextProtocol.ProgressNotificationValue> {
-    internal static NoProgress Instance { get; } = new();
+    internal static NoProgress instance { get; } = new();
 
     public void Report(ModelContextProtocol.ProgressNotificationValue value) {
     }

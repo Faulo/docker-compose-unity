@@ -12,19 +12,19 @@ using ModelContextProtocol;
 namespace ComposeUnity;
 
 enum EWindowsHostPathStrategy {
-    Original,
-    Wsl,
-    DockerDesktop,
-    LegacyDesktop
+    ORIGINAL,
+    WSL,
+    DOCKER_DESKTOP,
+    LEGACY_DESKTOP
 }
 
 sealed class UnityMcpController : IAsyncDisposable {
     const string LABEL_PREFIX = "net.slothsoft.compose-unity";
     const string WORKER_CONFIGURATION_LABEL = $"{LABEL_PREFIX}.worker-configuration";
     const string WORKER_DOTNET_GC_HEAP_COUNT = "DOTNET_GCHeapCount=2";
-    static readonly TimeSpan WorkerStopTimeout = TimeSpan.FromSeconds(10);
+    static readonly TimeSpan workerStopTimeout = TimeSpan.FromSeconds(10);
 
-    static readonly string[] ForwardedEnvironmentNames = [
+    static readonly string[] forwardedEnvironmentNames = [
         "UNITY_NO_GRAPHICS",
         "UNITY_ACCELERATOR_ENDPOINT",
         "UNITY_ACCELERATOR_PARAMS",
@@ -37,7 +37,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         "COMPOSE_UNITY_CALL_TIMEOUT"
     ];
 
-    static readonly string[] InheritedHostConfigurationNames = [
+    static readonly string[] inheritedHostConfigurationNames = [
         "Memory",
         "MemorySwap",
         "MemoryReservation",
@@ -91,19 +91,19 @@ sealed class UnityMcpController : IAsyncDisposable {
         this.stoppingToken = stoppingToken;
     }
 
-    string ProbeProjectRoot {
+    string probeProjectRoot {
         get => windowsContainers ? @"C:\compose-unity-probe" : "/compose-unity-probe";
     }
 
-    string WorkerProjectRoot {
+    string workerProjectRoot {
         get => windowsContainers ? @"C:\workspace\project" : "/var/workspace/project";
     }
 
-    string ComposeExecutable {
+    string composeExecutable {
         get => windowsContainers ? "compose-unity.exe" : "compose-unity";
     }
 
-    string WorkerWebGlRoot {
+    string workerWebGlRoot {
         get => windowsContainers ? @"C:\Windows\Temp\compose-unity-webgl" : "/tmp/compose-unity-webgl";
     }
 
@@ -198,14 +198,14 @@ sealed class UnityMcpController : IAsyncDisposable {
         return await ExecuteSerializedAsync(project, "run_tests", operationProgress, async (worker, token) => {
             operationProgress.ReportPhase("Running Unity tests");
             var command = new List<string> {
-                ComposeExecutable,
+                composeExecutable,
                 "exec",
                 "unity-command",
                 "--",
                 "tests",
                 "--junit",
                 "-",
-                WorkerProjectRoot
+                workerProjectRoot
             };
             command.AddRange(modes);
             var result = await ExecuteWorkerAsync(worker, command, token);
@@ -236,12 +236,12 @@ sealed class UnityMcpController : IAsyncDisposable {
         return await ExecuteSerializedAsync(project, "execute_method", operationProgress, async (worker, token) => {
             operationProgress.ReportPhase("Invoking Unity editor method");
             var command = new List<string> {
-                ComposeExecutable,
+                composeExecutable,
                 "exec",
                 "unity-command",
                 "--",
                 "method",
-                WorkerProjectRoot,
+                workerProjectRoot,
                 method,
                 "--"
             };
@@ -269,26 +269,26 @@ sealed class UnityMcpController : IAsyncDisposable {
         return await ExecuteSerializedAsync(project, "build_and_serve_webgl", operationProgress, async (worker, token) => {
             operationProgress.ReportPhase("Installing WebGL Build Support - step 1 of 3");
             var moduleResult = await ExecuteWorkerAsync(worker, [
-                ComposeExecutable,
+                composeExecutable,
                 "exec",
                 "unity-command",
                 "--",
                 "module-install",
-                WorkerProjectRoot,
+                workerProjectRoot,
                 "webgl"
             ], token);
             EnsureSuccessful(moduleResult, "Unity WebGL Build Support installation");
 
-            string workerOutput = CombineContainerPath(WorkerWebGlRoot, Guid.NewGuid().ToString("N"), windowsContainers);
+            string workerOutput = CombineContainerPath(workerWebGlRoot, Guid.NewGuid().ToString("N"), windowsContainers);
             try {
                 operationProgress.ReportPhase("Building WebGL - step 2 of 3");
                 var buildResult = await ExecuteWorkerAsync(worker, [
-                    ComposeExecutable,
+                    composeExecutable,
                     "exec",
                     "unity-command",
                     "--",
                     "method",
-                    WorkerProjectRoot,
+                    workerProjectRoot,
                     "Slothsoft.UnityExtensions.Editor.Build.WebGL",
                     "--",
                     "-buildTarget",
@@ -316,7 +316,7 @@ sealed class UnityMcpController : IAsyncDisposable {
     internal async Task StopActiveWorkersAsync() {
         foreach (string worker in activeWorkers.Keys) {
             try {
-                await docker.StopContainerAsync(worker, WorkerStopTimeout, CancellationToken.None);
+                await docker.StopContainerAsync(worker, workerStopTimeout, CancellationToken.None);
             } catch (Exception exception) {
                 Console.Error.WriteLine($"compose-unity-sidecar: failed to stop active MCP worker: {exception.Message}");
             }
@@ -352,9 +352,9 @@ sealed class UnityMcpController : IAsyncDisposable {
         CancellationToken cancellationToken) {
         activeWorkers.TryAdd(worker.id, 0);
         try {
-            return await docker.ExecAsync(worker.id, WorkerProjectRoot, command, cancellationToken);
+            return await docker.ExecAsync(worker.id, workerProjectRoot, command, cancellationToken);
         } catch (OperationCanceledException) {
-            await docker.StopContainerAsync(worker.id, WorkerStopTimeout, CancellationToken.None);
+            await docker.StopContainerAsync(worker.id, workerStopTimeout, CancellationToken.None);
             throw;
         } finally {
             activeWorkers.TryRemove(worker.id, out _);
@@ -379,7 +379,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         // the archive endpoint. Stopping and restarting preserves the retained
         // worker's writable layer, including its imported Unity Library.
         try {
-            await docker.StopContainerAsync(worker.id, WorkerStopTimeout, cancellationToken);
+            await docker.StopContainerAsync(worker.id, workerStopTimeout, cancellationToken);
             await docker.ExtractArchiveAsync(worker.id, source, destination, cancellationToken);
             MoveArchiveContentsToRoot(destination, ContainerPathName(source));
         } finally {
@@ -422,7 +422,7 @@ sealed class UnityMcpController : IAsyncDisposable {
             : ["rm", "-rf", "--", path];
         try {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var result = await docker.ExecAsync(worker.id, WorkerProjectRoot, command, timeout.Token);
+            var result = await docker.ExecAsync(worker.id, workerProjectRoot, command, timeout.Token);
             if (result.exitCode != 0) {
                 Console.Error.WriteLine($"compose-unity-sidecar: failed to remove temporary WebGL output from worker {worker.name}");
             }
@@ -504,14 +504,14 @@ sealed class UnityMcpController : IAsyncDisposable {
         try {
             var configuration = new JsonObject {
                 ["Image"] = imageId,
-                ["Cmd"] = DockerEngineClient.ToArray([ComposeExecutable, "sidecar", "probe-project", ProbeProjectRoot]),
+                ["Cmd"] = DockerEngineClient.ToArray([composeExecutable, "sidecar", "probe-project", probeProjectRoot]),
                 ["Labels"] = Labels("probe", null),
                 ["HostConfig"] = new JsonObject {
                     ["Mounts"] = new JsonArray {
                         new JsonObject {
                             ["Type"] = "bind",
                             ["Source"] = daemonRoot,
-                            ["Target"] = ProbeProjectRoot,
+                            ["Target"] = probeProjectRoot,
                             ["ReadOnly"] = true,
                             ["BindOptions"] = new JsonObject { ["CreateMountpoint"] = false }
                         }
@@ -532,7 +532,7 @@ sealed class UnityMcpController : IAsyncDisposable {
 
             var mount = inspected["Mounts"]?.AsArray()
                             .Select(node => node?.AsObject())
-                            .FirstOrDefault(mount => mount?["Destination"]?.GetValue<string>() == ProbeProjectRoot)
+                            .FirstOrDefault(mount => mount?["Destination"]?.GetValue<string>() == probeProjectRoot)
                         ?? throw new InvalidOperationException("Docker did not report the project probe bind mount.");
             string normalizedRoot = mount["Source"]?.GetValue<string>()
                                     ?? throw new InvalidOperationException("Docker did not report the normalized project source path.");
@@ -564,7 +564,7 @@ sealed class UnityMcpController : IAsyncDisposable {
             ValidateWorkerIdentity(inspected, project);
             string? actualFingerprint = inspected["Config"]?["Labels"]?[WORKER_CONFIGURATION_LABEL]?.GetValue<string>();
             if (actualFingerprint != expectedFingerprint) {
-                await docker.StopContainerAsync(name, WorkerStopTimeout, cancellationToken);
+                await docker.StopContainerAsync(name, workerStopTimeout, cancellationToken);
                 await docker.RemoveContainerAsync(name, true, true, cancellationToken);
                 inspected = null;
                 reused = false;
@@ -597,7 +597,7 @@ sealed class UnityMcpController : IAsyncDisposable {
     JsonObject BuildWorkerConfiguration(ValidatedProject project) {
         var hostConfiguration = new JsonObject();
         var selfHostConfiguration = self["HostConfig"]?.AsObject() ?? new JsonObject();
-        foreach (string name in InheritedHostConfigurationNames) {
+        foreach (string name in inheritedHostConfigurationNames) {
             var value = selfHostConfiguration[name];
             if (value is not null) {
                 hostConfiguration[name] = value.DeepClone();
@@ -625,7 +625,7 @@ sealed class UnityMcpController : IAsyncDisposable {
             mounts.Add(new JsonObject {
                 ["Type"] = "bind",
                 ["Source"] = CombineDaemonPath(project.normalizedRoot, directory, windowsContainers),
-                ["Target"] = CombineContainerPath(WorkerProjectRoot, directory, windowsContainers),
+                ["Target"] = CombineContainerPath(workerProjectRoot, directory, windowsContainers),
                 ["ReadOnly"] = false,
                 ["BindOptions"] = new JsonObject { ["CreateMountpoint"] = false }
             });
@@ -677,7 +677,7 @@ sealed class UnityMcpController : IAsyncDisposable {
     }
 
     JsonArray ForwardedEnvironment() {
-        var allowed = new HashSet<string>(ForwardedEnvironmentNames, StringComparer.Ordinal);
+        var allowed = new HashSet<string>(forwardedEnvironmentNames, StringComparer.Ordinal);
         var entries = new List<string>();
         foreach (var node in self["Config"]?["Env"]?.AsArray() ?? []) {
             string? entry = node?.GetValue<string>();
@@ -865,7 +865,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         bool windowsContainers,
         EWindowsHostPathStrategy preferredStrategy) {
         if (windowsContainers || !LooksLikeWindowsHostPath(path)) {
-            return [(EWindowsHostPathStrategy.Original, path)];
+            return [(EWindowsHostPathStrategy.ORIGINAL, path)];
         }
 
         EWindowsHostPathStrategy[] strategies = Enum.GetValues<EWindowsHostPathStrategy>();
@@ -878,15 +878,15 @@ sealed class UnityMcpController : IAsyncDisposable {
     }
 
     internal static string TranslateWindowsHostPath(string path, EWindowsHostPathStrategy strategy) {
-        if (strategy == EWindowsHostPathStrategy.Original) {
+        if (strategy == EWindowsHostPathStrategy.ORIGINAL) {
             return path;
         }
 
         char drive = char.ToLowerInvariant(path[0]);
         string root = strategy switch {
-            EWindowsHostPathStrategy.Wsl => $"/mnt/{drive}",
-            EWindowsHostPathStrategy.DockerDesktop => $"/run/desktop/mnt/host/{drive}",
-            EWindowsHostPathStrategy.LegacyDesktop => $"/host_mnt/{drive}",
+            EWindowsHostPathStrategy.WSL => $"/mnt/{drive}",
+            EWindowsHostPathStrategy.DOCKER_DESKTOP => $"/run/desktop/mnt/host/{drive}",
+            EWindowsHostPathStrategy.LEGACY_DESKTOP => $"/host_mnt/{drive}",
             _ => throw new ArgumentOutOfRangeException(nameof(strategy), strategy, null)
         };
         string suffix = path[3..].Replace('\\', '/').TrimEnd('/');
