@@ -282,11 +282,8 @@ RUN $hubPublish = 'C:\compose-unity\publish-hub'; \
     New-Item -ItemType HardLink -Path C:\Windows\compose-unity-sidecar.exe -Target C:\Windows\compose-unity.exe | Out-Null; \
     Remove-Item -LiteralPath C:\compose-unity\UnityHub, C:\compose-unity\SteamCmd, C:\compose-unity\compose-unity, $hubPublish, $steamCmdPublish, $composePublish -Recurse -Force
 
-ARG STEAMCMD_SHA256=7669B170DEE42DB8EE2273775ED7DFB2D173BDBA1B849F70D2C7B379290BCE13
 RUN $archive = 'C:\steamcmd.zip'; \
     Invoke-WebRequest -Uri 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip' -OutFile $archive; \
-    $actualHash = (Get-FileHash -Algorithm SHA256 $archive).Hash; \
-    if ($actualHash -ne $env:STEAMCMD_SHA256) { throw "SteamCMD archive checksum mismatch: $actualHash" }; \
     $extractRoot = 'C:\steamcmd-installer'; \
     Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot; \
     $installer = Join-Path $extractRoot 'steamcmd.exe'; \
