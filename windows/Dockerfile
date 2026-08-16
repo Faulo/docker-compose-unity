@@ -255,34 +255,15 @@ ENV UNITY_NO_GRAPHICS="1"
 
 # Windows containers cannot start Electron's sandboxed GPU process. Keep Unity's
 # documented CLI syntax externally and translate it before launching Hub.
-COPY ["windows/Unity Hub.cs", "C:/compose-unity/Unity Hub.cs"]
-COPY ["windows/SteamCmd.cs", "C:/compose-unity/SteamCmd.cs"]
+COPY windows/UnityHub C:/compose-unity/UnityHub
+COPY windows/SteamCmd C:/compose-unity/SteamCmd
 COPY common/ComposeUnity C:/compose-unity/compose-unity
-RUN $project = 'C:\compose-unity\launcher.csproj'; \
-    $hubSource = 'C:\compose-unity\Unity Hub.cs'; \
-    $steamCmdSource = 'C:\compose-unity\SteamCmd.cs'; \
-    $hubPublish = 'C:\compose-unity\publish-hub'; \
+RUN $hubPublish = 'C:\compose-unity\publish-hub'; \
     $steamCmdPublish = 'C:\compose-unity\publish-steamcmd'; \
     $composePublish = 'C:\compose-unity\publish-compose'; \
-    Set-Content -LiteralPath $project -Encoding UTF8 -Value @( \
-        '<Project Sdk=''Microsoft.NET.Sdk''>', \
-        '  <PropertyGroup>', \
-        '    <OutputType>Exe</OutputType>', \
-        ('    <TargetFramework>net' + $env:DOTNET_VERSION + '</TargetFramework>'), \
-        '    <PublishSingleFile>true</PublishSingleFile>', \
-        '    <SelfContained>false</SelfContained>', \
-        '    <RuntimeIdentifier>win-x64</RuntimeIdentifier>', \
-        '    <DebugType>none</DebugType>', \
-        '    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>', \
-        '  </PropertyGroup>', \
-        '  <ItemGroup>', \
-        '    <Compile Include=''$(LauncherSource)'' />', \
-        '  </ItemGroup>', \
-        '</Project>' \
-    ); \
-    dotnet publish $project --nologo --configuration Release --output $hubPublish "-p:LauncherSource=$hubSource" -p:AssemblyName=unity-hub-launcher; \
+    dotnet publish C:\compose-unity\UnityHub\UnityHub.csproj --nologo --configuration Release --output $hubPublish ('-p:ComposeUnityTargetFramework=net' + $env:DOTNET_VERSION) -p:RuntimeIdentifier=win-x64; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the Unity Hub launcher' }; \
-    dotnet publish $project --nologo --configuration Release --output $steamCmdPublish "-p:LauncherSource=$steamCmdSource" -p:AssemblyName=steamcmd; \
+    dotnet publish C:\compose-unity\SteamCmd\SteamCmd.csproj --nologo --configuration Release --output $steamCmdPublish ('-p:ComposeUnityTargetFramework=net' + $env:DOTNET_VERSION) -p:RuntimeIdentifier=win-x64; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the SteamCMD launcher' }; \
     dotnet publish C:\compose-unity\compose-unity\ComposeUnity.csproj --nologo --configuration Release --output $composePublish ('-p:ComposeUnityTargetFramework=net' + $env:DOTNET_VERSION) -p:RuntimeIdentifier=win-x64; \
     if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the compose-unity launcher' }; \
@@ -299,8 +280,7 @@ RUN $project = 'C:\compose-unity\launcher.csproj'; \
     Move-Item -LiteralPath $steamCmdArtifacts[0].FullName -Destination C:\steamcmd\steamcmd.exe; \
     Copy-Item -LiteralPath $composeArtifacts[0].FullName -Destination C:\Windows\compose-unity.exe; \
     New-Item -ItemType HardLink -Path C:\Windows\compose-unity-sidecar.exe -Target C:\Windows\compose-unity.exe | Out-Null; \
-    Remove-Item -LiteralPath $project, $hubSource, $steamCmdSource -Force; \
-    Remove-Item -LiteralPath C:\compose-unity\bin, C:\compose-unity\obj, C:\compose-unity\compose-unity, $hubPublish, $steamCmdPublish, $composePublish -Recurse -Force
+    Remove-Item -LiteralPath C:\compose-unity\UnityHub, C:\compose-unity\SteamCmd, C:\compose-unity\compose-unity, $hubPublish, $steamCmdPublish, $composePublish -Recurse -Force
 
 ARG STEAMCMD_SHA256=7669B170DEE42DB8EE2273775ED7DFB2D173BDBA1B849F70D2C7B379290BCE13
 RUN $archive = 'C:\steamcmd.zip'; \

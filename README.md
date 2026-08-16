@@ -80,7 +80,7 @@ Build inputs are organized by ownership:
 - `common/ComposeUnity.DaemonTests/` contains opt-in NUnit tests against local
   Linux and Windows Docker daemons and a deterministic worker backend.
 - `linux/` contains the Linux Dockerfile and machine identity.
-- `windows/` contains the Windows Dockerfile, Hub launcher and patch, Chocolatey package, and PHP extension configuration.
+- `windows/` contains the Windows Dockerfile, the `UnityHub` and `SteamCmd` launcher projects, the Hub patch, Chocolatey package, and PHP extension configuration.
 
 Both Docker builds use the repository root as build context. Both images create their Composer project during the build, require `slothsoft/unity`, and configure the process timeout from `UNITY_TIMEOUT`.
 

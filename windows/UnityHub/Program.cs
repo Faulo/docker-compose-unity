@@ -2,26 +2,23 @@ using System;
 using System.Diagnostics;
 using System.IO;
 
-const string RealExecutableName = "Unity Hub.real.exe";
+const string realExecutableName = "Unity Hub.real.exe";
 
 var installDirectory = AppContext.BaseDirectory;
 var startInfo = new ProcessStartInfo(
-    Path.Combine(installDirectory, RealExecutableName)
-)
-{
+    Path.Combine(installDirectory, realExecutableName)
+) {
     WorkingDirectory = installDirectory,
     UseShellExecute = false
 };
 
 var firstForwardedArgument = 0;
 // Electron switches before Unity's delimiter hide --headless from Hub's yargs parser.
-if (args.Length >= 2 && args[0] == "--" && args[1] == "--headless")
-{
+if (args.Length >= 2 && args[0] == "--" && args[1] == "--headless") {
     startInfo.ArgumentList.Add("--disable-gpu-sandbox");
     firstForwardedArgument = 1;
 }
-for (var index = firstForwardedArgument; index < args.Length; index++)
-{
+for (var index = firstForwardedArgument; index < args.Length; index++) {
     startInfo.ArgumentList.Add(args[index]);
 }
 
