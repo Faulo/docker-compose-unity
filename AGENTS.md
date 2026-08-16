@@ -61,7 +61,7 @@ unless the task explicitly permits a breaking change.
 
 ### Project conventions
 
-`.editorconfig` is authoritative.
+`.editorconfig` is authoritative. Never edit `.editorconfig` unless expressly instructed by the user.
 
 ### Git
 
