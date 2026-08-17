@@ -82,10 +82,10 @@ When Git mutations are authorized:
 - Keep commits small and cohesive.
 - Format agent-authored commits according to Conventional Commits 1.0.0:
   `<type>[optional scope]: <description>`.
-- When working from a Jira ticket, include the ticket key and URL in the commit
+- When working from a ticket, include the ticket key and URL in the commit
   footer.
 - Before committing, read the configured Git author name and email. Keep the
-  configured email, append the agent name once to the configured author name,
+  configured email, append the agent name once, in brackets to the configured author name (e.g. `Daniel Schulz (Codex)`),
   and pass that identity explicitly with `git commit --author`. Do not modify
   repository or global Git configuration.
 - Do not force-push, amend, rebase, reset, or discard changes unless the user
