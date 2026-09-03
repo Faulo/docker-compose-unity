@@ -8,7 +8,10 @@ on:
             - "common/**"
             - "linux/**"
             - "windows/**"
+            - ".env"
             - ".github/workflows/docker.yml"
+            - "Directory.Build.props"
+            - "global.json"
     workflow_dispatch:
     schedule:
         - cron: "17 3 1 * *"

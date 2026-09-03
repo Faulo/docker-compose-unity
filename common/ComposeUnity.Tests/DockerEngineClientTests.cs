@@ -490,7 +490,7 @@ sealed class FakeDockerEngine : IAsyncDisposable {
                 PipeTransmissionMode.Byte,
                 PipeOptions.Asynchronous);
             await pipe.WaitForConnectionAsync(stopping.Token);
-            await HandleAsync(pipe);
+            await HandleConnectionAsync(pipe);
         }
     }
 
@@ -501,7 +501,15 @@ sealed class FakeDockerEngine : IAsyncDisposable {
         while (!stopping.IsCancellationRequested) {
             using var socket = await listener.AcceptAsync(stopping.Token);
             await using var stream = new NetworkStream(socket, false);
+            await HandleConnectionAsync(stream);
+        }
+    }
+
+    async Task HandleConnectionAsync(Stream stream) {
+        try {
             await HandleAsync(stream);
+        } catch (IOException) {
+            // Request cancellation closes the client transport and is not a server failure.
         }
     }
 
