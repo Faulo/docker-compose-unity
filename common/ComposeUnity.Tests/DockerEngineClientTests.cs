@@ -348,7 +348,18 @@ public sealed class DockerEngineClientTests {
 
             return Task.FromResult(FakeDockerResponse.NotFound());
         });
-        await using var controller = await engine.CreateControllerAsync(CancellationToken.None);
+        var credentials = RuntimeCredentials.Resolve(
+            name => name switch {
+                "UNITY_CREDENTIALS_USR" => "worker-unity-user",
+                "UNITY_CREDENTIALS_PSW" => "worker-unity-password",
+                "EMAIL_CREDENTIALS_USR" => "worker-email-user",
+                "EMAIL_CREDENTIALS_PSW" => "worker-email-password",
+                "STEAM_CREDENTIALS_USR" => "worker-steam-user",
+                "STEAM_CREDENTIALS_PSW" => "worker-steam-password",
+                _ => null
+            },
+            _ => throw new InvalidOperationException());
+        await using var controller = await engine.CreateControllerAsync(credentials, CancellationToken.None);
 
         var progress = new RecordingProgress();
         object first = await controller.ExecuteMethodAsync(validProject, "Example.Build", ["", "two words", "--"], progress, CancellationToken.None);
@@ -396,6 +407,18 @@ public sealed class DockerEngineClientTests {
             Assert.That(execBody["WorkingDir"]?.GetValue<string>(), Is.EqualTo(workerRoot));
             Assert.That(execBody["Cmd"]?.AsArray().Select(node => node!.GetValue<string>()),
                 Is.EqualTo(new[] { composeExecutable, "exec", "unity-command", "--", "method", workerRoot, "Example.Build", "--", "", "two words", "--" }));
+            Assert.That(execBody["Env"]?.AsArray().Select(node => node!.GetValue<string>()), Is.EqualTo(new[] {
+                "UNITY_CREDENTIALS_USR=worker-unity-user",
+                "UNITY_CREDENTIALS_PSW=worker-unity-password",
+                "EMAIL_CREDENTIALS_USR=worker-email-user",
+                "EMAIL_CREDENTIALS_PSW=worker-email-password"
+            }));
+            Assert.That(workerConfiguration.ToJsonString(), Does.Not.Contain("worker-unity-user"));
+            Assert.That(workerConfiguration.ToJsonString(), Does.Not.Contain("worker-unity-password"));
+            Assert.That(workerConfiguration.ToJsonString(), Does.Not.Contain("worker-email-user"));
+            Assert.That(workerConfiguration.ToJsonString(), Does.Not.Contain("worker-email-password"));
+            Assert.That(workerConfiguration.ToJsonString(), Does.Not.Contain("worker-steam-user"));
+            Assert.That(workerConfiguration.ToJsonString(), Does.Not.Contain("worker-steam-password"));
         });
     }
 
@@ -479,7 +502,12 @@ sealed class FakeDockerEngine : IAsyncDisposable {
     internal DockerEngineClient CreateClient() => new(pipeName, unixSocketPath);
 
     internal Task<UnityMcpController> CreateControllerAsync(CancellationToken cancellationToken) =>
-        UnityMcpController.CreateAsync(cancellationToken, pipeName, unixSocketPath);
+        CreateControllerAsync(RuntimeCredentials.empty, cancellationToken);
+
+    internal Task<UnityMcpController> CreateControllerAsync(
+        RuntimeCredentials credentials,
+        CancellationToken cancellationToken) =>
+        UnityMcpController.CreateAsync(credentials, cancellationToken, pipeName, unixSocketPath);
 
     async Task RunWindowsAsync() {
         while (!stopping.IsCancellationRequested) {

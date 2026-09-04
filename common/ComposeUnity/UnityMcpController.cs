@@ -30,10 +30,6 @@ sealed class UnityMcpController : IAsyncDisposable {
         "UNITY_ACCELERATOR_PARAMS",
         "UNITY_LOGGING",
         "UNITY_EMPTY_MANIFEST",
-        "UNITY_CREDENTIALS_USR",
-        "UNITY_CREDENTIALS_PSW",
-        "EMAIL_CREDENTIALS_USR",
-        "EMAIL_CREDENTIALS_PSW",
         "COMPOSE_UNITY_CALL_TIMEOUT"
     ];
 
@@ -72,6 +68,7 @@ sealed class UnityMcpController : IAsyncDisposable {
     readonly ConcurrentDictionary<string, Lazy<Task<ValidatedProject>>> projects = new(StringComparer.Ordinal);
     readonly JsonObject self;
     readonly CancellationToken stoppingToken;
+    readonly RuntimeCredentials credentials;
     readonly bool windowsContainers;
     int preferredWindowsHostPathStrategy;
 
@@ -81,6 +78,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         string controllerId,
         string imageId,
         bool windowsContainers,
+        RuntimeCredentials credentials,
         CancellationToken stoppingToken) {
         this.docker = docker;
         this.self = self;
@@ -88,6 +86,7 @@ sealed class UnityMcpController : IAsyncDisposable {
         this.imageId = imageId;
         imageHash = Hash(imageId)[..12];
         this.windowsContainers = windowsContainers;
+        this.credentials = credentials;
         this.stoppingToken = stoppingToken;
     }
 
@@ -112,16 +111,22 @@ sealed class UnityMcpController : IAsyncDisposable {
         await docker.DisposeAsync();
     }
 
-    internal static Task<UnityMcpController> CreateAsync(CancellationToken stoppingToken) =>
-        CreateAsync(new DockerEngineClient(), stoppingToken);
+    internal static Task<UnityMcpController> CreateAsync(
+        RuntimeCredentials credentials,
+        CancellationToken stoppingToken) =>
+        CreateAsync(new DockerEngineClient(), credentials, stoppingToken);
 
     internal static Task<UnityMcpController> CreateAsync(
+        RuntimeCredentials credentials,
         CancellationToken stoppingToken,
         string windowsPipeName,
         string unixSocketPath) =>
-        CreateAsync(new DockerEngineClient(windowsPipeName, unixSocketPath), stoppingToken);
+        CreateAsync(new DockerEngineClient(windowsPipeName, unixSocketPath), credentials, stoppingToken);
 
-    static async Task<UnityMcpController> CreateAsync(DockerEngineClient docker, CancellationToken stoppingToken) {
+    static async Task<UnityMcpController> CreateAsync(
+        DockerEngineClient docker,
+        RuntimeCredentials credentials,
+        CancellationToken stoppingToken) {
         try {
             JsonObject version;
             try {
@@ -150,6 +155,7 @@ sealed class UnityMcpController : IAsyncDisposable {
                 controllerId,
                 imageId,
                 windowsContainers,
+                credentials,
                 stoppingToken);
         } catch {
             await docker.DisposeAsync();
@@ -352,7 +358,12 @@ sealed class UnityMcpController : IAsyncDisposable {
         CancellationToken cancellationToken) {
         activeWorkers.TryAdd(worker.id, 0);
         try {
-            return await docker.ExecAsync(worker.id, workerProjectRoot, command, cancellationToken);
+            return await docker.ExecAsync(
+                worker.id,
+                workerProjectRoot,
+                command,
+                credentials.WorkerEnvironment(),
+                cancellationToken);
         } catch (OperationCanceledException) {
             await docker.StopContainerAsync(worker.id, workerStopTimeout, CancellationToken.None);
             throw;

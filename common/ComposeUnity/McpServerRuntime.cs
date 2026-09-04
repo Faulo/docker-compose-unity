@@ -58,12 +58,14 @@ sealed class McpServerRuntime : IAsyncDisposable {
         stopping.Dispose();
     }
 
-    internal static async Task<McpServerRuntime> StartAsync(CancellationToken sidecarStopping) {
+    internal static async Task<McpServerRuntime> StartAsync(
+        RuntimeCredentials credentials,
+        CancellationToken sidecarStopping) {
         var stopping = CancellationTokenSource.CreateLinkedTokenSource(sidecarStopping);
         UnityMcpController? controller = null;
         WebApplication? application = null;
         try {
-            controller = await UnityMcpController.CreateAsync(stopping.Token);
+            controller = await UnityMcpController.CreateAsync(credentials, stopping.Token);
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [], ApplicationName = typeof(McpServerRuntime).Assembly.FullName });
             builder.Logging.ClearProviders();
             builder.WebHost.UseUrls("http://0.0.0.0:8080");

@@ -135,6 +135,15 @@ sealed class DockerEngineClient : IAsyncDisposable {
         string workingDirectory,
         IReadOnlyList<string> command,
         CancellationToken cancellationToken) {
+        return await ExecAsync(container, workingDirectory, command, [], cancellationToken);
+    }
+
+    internal async Task<ExecResult> ExecAsync(
+        string container,
+        string workingDirectory,
+        IReadOnlyList<string> command,
+        IReadOnlyList<string> environment,
+        CancellationToken cancellationToken) {
         var configuration = new JsonObject {
             ["AttachStdout"] = true,
             ["AttachStderr"] = true,
@@ -142,6 +151,9 @@ sealed class DockerEngineClient : IAsyncDisposable {
             ["WorkingDir"] = workingDirectory,
             ["Cmd"] = ToArray(command)
         };
+        if (environment.Count > 0) {
+            configuration["Env"] = ToArray(environment);
+        }
         var created = await SendJsonAsync(
             HttpMethod.Post,
             $"/containers/{Escape(container)}/exec",

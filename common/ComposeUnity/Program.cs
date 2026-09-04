@@ -19,7 +19,7 @@ static class Program {
             var command = CommandRouter.Route(executable, args);
             return command.mode == EApplicationMode.SIDECAR
                 ? await RunSidecarCommandAsync(command.arguments)
-                : await RunComposeUnityAsync(command.arguments);
+                : await RunComposeUnityAsync(command.arguments, RuntimeCredentials.Resolve());
         } catch (Exception exception) {
             Console.Error.WriteLine($"{executable}: {exception.Message}");
             return 1;
@@ -53,7 +53,7 @@ static class Program {
 
     static async Task<int> RunSidecarCommandAsync(string[] args) {
         if (args.Length == 0) {
-            return await RunSupervisorAsync();
+            return await RunSupervisorAsync(RuntimeCredentials.Resolve());
         }
 
         if (args.Length == 1 && args[0].Equals("status", StringComparison.OrdinalIgnoreCase)) {
@@ -72,7 +72,7 @@ static class Program {
         return 2;
     }
 
-    static async Task<int> RunComposeUnityAsync(string[] args) {
+    static async Task<int> RunComposeUnityAsync(string[] args, RuntimeCredentials credentials) {
         long timeoutSeconds = ParseTimeout();
         var store = new StateStore();
         store.EnsureDirectories();
@@ -89,7 +89,7 @@ static class Program {
         using var signals = SignalHandlers.Register(cancellation);
 
         try {
-            child = ProcessTree.StartComposer(args, invocationId);
+            child = ProcessTree.StartComposer(args, invocationId, credentials);
             record = new InvocationRecord {
                 id = invocationId,
                 command = command,
@@ -156,7 +156,7 @@ static class Program {
         }
     }
 
-    static async Task<int> RunSupervisorAsync() {
+    static async Task<int> RunSupervisorAsync(RuntimeCredentials credentials) {
         bool mcpEnabled = McpActivation.Parse();
         var store = new StateStore();
         store.EnsureDirectories();
@@ -178,7 +178,7 @@ static class Program {
 
         try {
             if (mcpEnabled) {
-                mcp = await McpServerRuntime.StartAsync(cancellation.Token);
+                mcp = await McpServerRuntime.StartAsync(credentials, cancellation.Token);
             }
 
             var ready = new ReadyRecord { supervisor = ProcessIdentity.Current(), startedAtUtc = DateTimeOffset.UtcNow, mcpEnabled = mcpEnabled, mcpReady = mcp is not null };
@@ -391,8 +391,12 @@ static class Program {
         return startInfo;
     }
 
-    internal static ProcessStartInfo ComposerStartInfo(string[] args, bool redirectOutput = false) {
+    internal static ProcessStartInfo ComposerStartInfo(
+        string[] args,
+        bool redirectOutput = false,
+        RuntimeCredentials? credentials = null) {
         var startInfo = ComposerStartInfo(redirectOutput);
+        credentials?.ApplyTo(startInfo);
         foreach (string argument in args) {
             startInfo.ArgumentList.Add(argument);
         }
@@ -675,10 +679,10 @@ sealed class ChildProcess : IDisposable {
 }
 
 static class ProcessTree {
-    internal static ChildProcess StartComposer(string[] args, string invocationId) {
+    internal static ChildProcess StartComposer(string[] args, string invocationId, RuntimeCredentials credentials) {
         return OperatingSystem.IsWindows()
-            ? WindowsProcessTree.Start(Program.ComposerStartInfo(args), invocationId)
-            : UnixProcessTree.Start(Program.ComposerStartInfo(args));
+            ? WindowsProcessTree.Start(Program.ComposerStartInfo(args, credentials: credentials), invocationId)
+            : UnixProcessTree.Start(Program.ComposerStartInfo(args, credentials: credentials));
     }
 
     internal static Task TerminateChildAsync(ChildProcess child, TimeSpan gracePeriod) => OperatingSystem.IsWindows()

@@ -177,6 +177,28 @@ same directory, preserves the caller's working directory, attached input,
 output, and exit status, and registers each call with the sidecar. The
 image-level `COMPOSE_UNITY` command points to this native launcher as well.
 
+### Runtime credentials
+
+Unity, mailbox, and Steam credentials accept either their existing direct
+environment variables or conventional file-backed variants:
+
+| Credential | Direct variables | File-backed variables |
+| --- | --- | --- |
+| Unity | `UNITY_CREDENTIALS_USR`, `UNITY_CREDENTIALS_PSW` | `UNITY_CREDENTIALS_USR_FILE`, `UNITY_CREDENTIALS_PSW_FILE` |
+| Mailbox | `EMAIL_CREDENTIALS_USR`, `EMAIL_CREDENTIALS_PSW` | `EMAIL_CREDENTIALS_USR_FILE`, `EMAIL_CREDENTIALS_PSW_FILE` |
+| Steam | `STEAM_CREDENTIALS_USR`, `STEAM_CREDENTIALS_PSW` | `STEAM_CREDENTIALS_USR_FILE`, `STEAM_CREDENTIALS_PSW_FILE` |
+
+Each username/password pair may mix direct and file-backed inputs, but the
+direct and `_FILE` forms of one value cannot both be set. Configured pairs must
+be complete. Missing, unreadable, and empty files fail before the requested
+command starts. A trailing line ending written by a secrets manager is removed;
+other whitespace remains part of the credential.
+
+The launcher resolves file-backed values only for the child command. MCP passes
+resolved Unity and mailbox credentials to each worker command without storing
+them in retained worker container configuration or labels. Steam credentials
+are used by the one-off `steam-login` command.
+
 ## Long-Running Sidecar
 
 With no explicit command, the image starts `compose-unity sidecar` as PID 1.
@@ -198,10 +220,12 @@ services:
     image: faulo/compose-unity:latest
     environment:
       - COMPOSE_UNITY_MCP=1
-      - UNITY_CREDENTIALS_USR
-      - UNITY_CREDENTIALS_PSW
-      - EMAIL_CREDENTIALS_USR
-      - EMAIL_CREDENTIALS_PSW
+      - UNITY_CREDENTIALS_USR_FILE=/run/secrets/unity-user
+      - UNITY_CREDENTIALS_PSW_FILE=/run/secrets/unity-password
+      - EMAIL_CREDENTIALS_USR_FILE=/run/secrets/email-user
+      - EMAIL_CREDENTIALS_PSW_FILE=/run/secrets/email-password
+      - STEAM_CREDENTIALS_USR_FILE=/run/secrets/steam-user
+      - STEAM_CREDENTIALS_PSW_FILE=/run/secrets/steam-password
     ports:
       - "127.0.0.1:3310:8080"
     volumes:
@@ -213,6 +237,13 @@ services:
       - unity-license:/root/.local/share/unity3d
     tmpfs:
       - /compose-unity/webgl
+    secrets:
+      - unity-user
+      - unity-password
+      - email-user
+      - email-password
+      - steam-user
+      - steam-password
 
 volumes:
   unity-binaries:
@@ -220,6 +251,20 @@ volumes:
   unity-hub:
   unity-cache:
   unity-license:
+
+secrets:
+  unity-user:
+    file: ./secrets/unity-user.txt
+  unity-password:
+    file: ./secrets/unity-password.txt
+  email-user:
+    file: ./secrets/email-user.txt
+  email-password:
+    file: ./secrets/email-password.txt
+  steam-user:
+    file: ./secrets/steam-user.txt
+  steam-password:
+    file: ./secrets/steam-password.txt
 ```
 
 The equivalent Windows container uses the Docker Engine named pipe and Windows
@@ -231,10 +276,12 @@ services:
     image: faulo/compose-unity:latest
     environment:
       - COMPOSE_UNITY_MCP=1
-      - UNITY_CREDENTIALS_USR
-      - UNITY_CREDENTIALS_PSW
-      - EMAIL_CREDENTIALS_USR
-      - EMAIL_CREDENTIALS_PSW
+      - 'UNITY_CREDENTIALS_USR_FILE=C:\ProgramData\Docker\secrets\unity-user'
+      - 'UNITY_CREDENTIALS_PSW_FILE=C:\ProgramData\Docker\secrets\unity-password'
+      - 'EMAIL_CREDENTIALS_USR_FILE=C:\ProgramData\Docker\secrets\email-user'
+      - 'EMAIL_CREDENTIALS_PSW_FILE=C:\ProgramData\Docker\secrets\email-password'
+      - 'STEAM_CREDENTIALS_USR_FILE=C:\ProgramData\Docker\secrets\steam-user'
+      - 'STEAM_CREDENTIALS_PSW_FILE=C:\ProgramData\Docker\secrets\steam-password'
     ports:
       - "127.0.0.1:3310:8080"
     volumes:
@@ -244,6 +291,13 @@ services:
       - unity-hub:C:/Users/ContainerAdministrator/AppData/Roaming/UnityHub
       - unity-cache:C:/Users/ContainerAdministrator/AppData/Local/Unity
       - unity-license:C:/ProgramData/Unity
+    secrets:
+      - unity-user
+      - unity-password
+      - email-user
+      - email-password
+      - steam-user
+      - steam-password
 
 volumes:
   unity-binaries:
@@ -251,6 +305,20 @@ volumes:
   unity-hub:
   unity-cache:
   unity-license:
+
+secrets:
+  unity-user:
+    file: ./secrets/unity-user.txt
+  unity-password:
+    file: ./secrets/unity-password.txt
+  email-user:
+    file: ./secrets/email-user.txt
+  email-password:
+    file: ./secrets/email-password.txt
+  steam-user:
+    file: ./secrets/steam-user.txt
+  steam-password:
+    file: ./secrets/steam-password.txt
 ```
 
 For example, Codex MCP configuration uses the same IP and port published by the

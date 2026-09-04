@@ -85,7 +85,15 @@ static int executeMethod(string[] command) {
         arguments = values,
         workingDirectory = Environment.CurrentDirectory,
         composerProject = Environment.GetEnvironmentVariable("COMPOSER"),
-        composerVendorDirectory = Environment.GetEnvironmentVariable("COMPOSER_VENDOR_DIR")
+        composerVendorDirectory = Environment.GetEnvironmentVariable("COMPOSER_VENDOR_DIR"),
+        credentials = new {
+            unity = Environment.GetEnvironmentVariable("UNITY_CREDENTIALS_USR") == "daemon-unity-user"
+                    && Environment.GetEnvironmentVariable("UNITY_CREDENTIALS_PSW") == "daemon-unity-password",
+            email = Environment.GetEnvironmentVariable("EMAIL_CREDENTIALS_USR") == "daemon-email-user"
+                    && Environment.GetEnvironmentVariable("EMAIL_CREDENTIALS_PSW") == "daemon-email-password",
+            steam = Environment.GetEnvironmentVariable("STEAM_CREDENTIALS_USR") == "daemon-steam-user"
+                    && Environment.GetEnvironmentVariable("STEAM_CREDENTIALS_PSW") == "daemon-steam-password"
+        }
     }));
     Console.Error.WriteLine("daemon-test stderr");
     return 7;

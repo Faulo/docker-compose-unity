@@ -51,6 +51,14 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         try {
             Directory.CreateDirectory(Path.Combine(staging, "controller"));
             Directory.CreateDirectory(Path.Combine(staging, "backend"));
+            string secrets = Path.Combine(staging, "secrets");
+            Directory.CreateDirectory(secrets);
+            await File.WriteAllTextAsync(Path.Combine(secrets, "unity-user"), "daemon-unity-user\n");
+            await File.WriteAllTextAsync(Path.Combine(secrets, "unity-password"), "daemon-unity-password\r\n");
+            await File.WriteAllTextAsync(Path.Combine(secrets, "email-user"), "daemon-email-user");
+            await File.WriteAllTextAsync(Path.Combine(secrets, "email-password"), "daemon-email-password");
+            await File.WriteAllTextAsync(Path.Combine(secrets, "steam-user"), "daemon-steam-user");
+            await File.WriteAllTextAsync(Path.Combine(secrets, "steam-password"), "daemon-steam-password");
             string runtime = expectedOs == "windows" ? "win-x64" : "linux-x64";
             await PublishAsync(Path.Combine(repository, "common", "ComposeUnity", "ComposeUnity.csproj"), runtime, Path.Combine(staging, "controller"));
             await PublishAsync(Path.Combine(repository, "common", "ComposeUnity.DaemonTests.Backend", "ComposeUnity.DaemonTests.Backend.csproj"), runtime, Path.Combine(staging, "backend"));
@@ -63,13 +71,28 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             string dockerMount = expectedOs == "windows"
                 ? WindowsDockerMount(contextEndpoint)
                 : "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock";
+            string credentialRoot = expectedOs == "windows" ? @"C:\compose-unity-secrets" : "/run/compose-unity-secrets";
             var runArguments = new List<string> {
                 "run",
                 "--detach",
                 "--name",
                 container,
                 "--env",
-                "COMPOSE_UNITY_MCP=1"
+                "COMPOSE_UNITY_MCP=1",
+                "--env",
+                $"UNITY_CREDENTIALS_USR_FILE={CombineContainerPath(credentialRoot, "unity-user")}",
+                "--env",
+                $"UNITY_CREDENTIALS_PSW_FILE={CombineContainerPath(credentialRoot, "unity-password")}",
+                "--env",
+                $"EMAIL_CREDENTIALS_USR_FILE={CombineContainerPath(credentialRoot, "email-user")}",
+                "--env",
+                $"EMAIL_CREDENTIALS_PSW_FILE={CombineContainerPath(credentialRoot, "email-password")}",
+                "--env",
+                $"STEAM_CREDENTIALS_USR_FILE={CombineContainerPath(credentialRoot, "steam-user")}",
+                "--env",
+                $"STEAM_CREDENTIALS_PSW_FILE={CombineContainerPath(credentialRoot, "steam-password")}",
+                "--mount",
+                $"type=bind,source={secrets},target={credentialRoot},readonly"
             };
             if (expectedOs == "linux") {
                 runArguments.AddRange(["--publish", "127.0.0.1::8080"]);
@@ -146,6 +169,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             Assert.That(result["errorOutput"]!.GetValue<string>(), Is.EqualTo("daemon-test stderr"));
             Assert.That(backend["method"]!.GetValue<string>(), Is.EqualTo("DaemonTests.Arguments"));
             Assert.That(backend["arguments"]!.Deserialize<string[]>(), Is.EqualTo(arguments));
+            Assert.That(backend["credentials"]!["unity"]!.GetValue<bool>(), Is.True);
+            Assert.That(backend["credentials"]!["email"]!.GetValue<bool>(), Is.True);
+            Assert.That(backend["credentials"]!["steam"]!.GetValue<bool>(), Is.False);
         }
     }
 
@@ -214,6 +240,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             Assert.That(backend["composerVendorDirectory"]!.GetValue<string>(), Is.EqualTo(expectedOs == "windows"
                 ? @"C:\compose-unity\vendor"
                 : "/compose-unity/vendor"));
+            Assert.That(backend["credentials"]!["unity"]!.GetValue<bool>(), Is.True);
+            Assert.That(backend["credentials"]!["email"]!.GetValue<bool>(), Is.True);
+            Assert.That(backend["credentials"]!["steam"]!.GetValue<bool>(), Is.True);
         }
     }
 
@@ -230,6 +259,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
         string fingerprint = (await DockerCheckedAsync([
             "inspect", "--format", "{{index .Config.Labels \"net.slothsoft.compose-unity.worker-configuration\"}}", workerBefore
         ])).standardOutput.Trim();
+        string workerConfiguration = (await DockerCheckedAsync([
+            "inspect", "--format", "{{json .Config}}", workerBefore
+        ])).standardOutput;
         string[] destinations = mounts.Select(mount => mount!["Destination"]!.GetValue<string>()).ToArray();
         int projectMounts = destinations.Count(destination => ProjectDirectoryRegex().IsMatch(destination));
         int dockerMounts = destinations.Count(destination => destination.Equals("/var/run/docker.sock", StringComparison.Ordinal)
@@ -238,7 +270,31 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             Assert.That(projectMounts, Is.EqualTo(3));
             Assert.That(dockerMounts, Is.Zero, "The worker must not receive the controller's Docker endpoint.");
             Assert.That(fingerprint, Does.Match("^[0-9a-f]{64}$"));
+            Assert.That(workerConfiguration, Does.Not.Contain("daemon-unity-user"));
+            Assert.That(workerConfiguration, Does.Not.Contain("daemon-unity-password"));
+            Assert.That(workerConfiguration, Does.Not.Contain("daemon-email-user"));
+            Assert.That(workerConfiguration, Does.Not.Contain("daemon-email-password"));
+            Assert.That(workerConfiguration, Does.Not.Contain("daemon-steam-user"));
+            Assert.That(workerConfiguration, Does.Not.Contain("daemon-steam-password"));
         }
+    }
+
+    [Test]
+    public async Task KeepsFileBackedSecretsOutOfControllerConfiguration() {
+        string configuration = (await DockerCheckedAsync([
+            "inspect", "--format", "{{json .Config.Env}}", container
+        ])).standardOutput;
+
+        Assert.Multiple(() => {
+            Assert.That(configuration, Does.Contain("UNITY_CREDENTIALS_USR_FILE="));
+            Assert.That(configuration, Does.Contain("STEAM_CREDENTIALS_PSW_FILE="));
+            Assert.That(configuration, Does.Not.Contain("daemon-unity-user"));
+            Assert.That(configuration, Does.Not.Contain("daemon-unity-password"));
+            Assert.That(configuration, Does.Not.Contain("daemon-email-user"));
+            Assert.That(configuration, Does.Not.Contain("daemon-email-password"));
+            Assert.That(configuration, Does.Not.Contain("daemon-steam-user"));
+            Assert.That(configuration, Does.Not.Contain("daemon-steam-password"));
+        });
     }
 
     [Test]
@@ -466,6 +522,9 @@ public sealed partial class DockerDaemonTests(string expectedOs, string dockerCo
             $"/host_mnt/{drive}/{suffix}".TrimEnd('/')
         ];
     }
+
+    string CombineContainerPath(string root, string name) =>
+        expectedOs == "windows" ? root + "\\" + name : root + "/" + name;
 
     void IgnoreOrFail(string message) {
         if (Environment.GetEnvironmentVariable(REQUIRED_OS_ENVIRONMENT)?.Equals(expectedOs, StringComparison.OrdinalIgnoreCase) == true) {
