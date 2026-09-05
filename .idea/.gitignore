@@ -1,12 +1,16 @@
 # Default ignored files
-/shelf/
-/workspace.xml
+shelf/
+workspace.xml
+
 # Editor-based HTTP Client requests
-/httpRequests/
+httpRequests/
+
 # Ignored default folder with query files
-/queries/
+queries/
+
 # Datasource local storage ignored files
-/dataSources/
-/dataSources.local.xml
+dataSources/
+dataSources.local.xml
+
 # DDEV
 /DdevIntegration.xml
