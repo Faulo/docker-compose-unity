@@ -4,9 +4,6 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# .NET build outputs
+# == .NET ==
 **/bin/
 **/obj/
-
-# Rider per-user settings
-*.DotSettings.user
