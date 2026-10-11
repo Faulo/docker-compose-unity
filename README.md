@@ -435,7 +435,7 @@ does not provide authentication and is not intended for remote publication.
 Run the daemon-free test suite with the .NET 9 SDK:
 
 ```text
-dotnet test common/ComposeUnity.Tests/ComposeUnity.Tests.csproj --configuration Release
+dotnet test common/ComposeUnity.Tests/ComposeUnity.Tests.csproj --configuration Release --logger junit
 ```
 
 The suite covers command routing and legacy compatibility, configuration and
@@ -448,7 +448,7 @@ Real-daemon tests live in a separate project because they build disposable
 execs, and MCP worker state on each available explicitly named local daemon:
 
 ```text
-dotnet test common/ComposeUnity.DaemonTests/ComposeUnity.DaemonTests.csproj --configuration Release
+dotnet test common/ComposeUnity.DaemonTests/ComposeUnity.DaemonTests.csproj --configuration Release --logger junit
 ```
 
 The fixtures use the explicitly named `linux` and `windows` Docker contexts,
@@ -474,3 +474,9 @@ the LTSC 2019 container can run on Windows Server 2022. CI runs the daemon-free
 suite plus Linux and Windows daemon fixtures before image builds. Full Unity
 invocation remains in the local image test scripts because editor downloads and
 licensing make it unsuitable for the lightweight CI harness.
+
+Jenkins runs `dotnet test --logger junit` in the .NET 9 SDK container on a
+Linux agent and publishes `**/TestResults.xml` with its native `junit` step.
+Each test project writes its report to `TestResults/TestResults.xml`.
+Image integration tests continue to use the targets and variants configured
+in `.jenkins/pesterProject.properties`.
