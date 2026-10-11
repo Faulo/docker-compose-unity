@@ -1,0 +1,91 @@
+<testsuites>
+  <testsuite name="ComposeUnity.DaemonTests.dll" tests="16" skipped="0" failures="0" errors="0" time="15.4467818" timestamp="2026-10-11T11:38:08" hostname="ESTELLE" id="0" package="ComposeUnity.DaemonTests.dll">
+    <properties />
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;linux&quot;,&quot;linux&quot;)" name="AdvertisesToolsAndReportsProjectInformation" time="0.7558810">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;linux&quot;,&quot;linux&quot;)" name="BuildsAndServesUnityWebGlContent" time="0.7967580">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;linux&quot;,&quot;linux&quot;)" name="KeepsFileBackedSecretsOutOfControllerConfiguration" time="0.0948259">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;linux&quot;,&quot;linux&quot;)" name="NativeLauncherPreservesWorkingDirectory" time="0.3600740">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;linux&quot;,&quot;linux&quot;)" name="ParsesTestResultsFromWorker" time="0.1892450">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;linux&quot;,&quot;linux&quot;)" name="PreservesMethodArgumentsOutputAndExitStatus" time="0.2040790">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;linux&quot;,&quot;linux&quot;)" name="ReusesWorkerAndMountsOnlyProjectDirectories" time="0.7400250">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;linux&quot;,&quot;linux&quot;)" name="StreamsCorrelatedProgressBeforeTheFinalToolResult" time="0.7447540">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;windows&quot;,&quot;windows&quot;)" name="AdvertisesToolsAndReportsProjectInformation" time="2.9270139">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;windows&quot;,&quot;windows&quot;)" name="BuildsAndServesUnityWebGlContent" time="5.0773550">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;windows&quot;,&quot;windows&quot;)" name="KeepsFileBackedSecretsOutOfControllerConfiguration" time="0.2030750">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;windows&quot;,&quot;windows&quot;)" name="NativeLauncherPreservesWorkingDirectory" time="0.4887170">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;windows&quot;,&quot;windows&quot;)" name="ParsesTestResultsFromWorker" time="0.4556400">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;windows&quot;,&quot;windows&quot;)" name="PreservesMethodArgumentsOutputAndExitStatus" time="0.2544030">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;windows&quot;,&quot;windows&quot;)" name="ReusesWorkerAndMountsOnlyProjectDirectories" time="1.3991860">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <testcase classname="ComposeUnity.DaemonTests.DockerDaemonTests(&quot;windows&quot;,&quot;windows&quot;)" name="StreamsCorrelatedProgressBeforeTheFinalToolResult" time="0.7557500">
+      <properties>
+        <property name="UseCancellation" value="True" />
+      </properties>
+    </testcase>
+    <system-out>
+Test Framework Informational Messages:
+NUnit Adapter 1.0.0.0: Test execution started
+Running all tests in C:\Users\Daniel.KDG\Desktop\Eclipse\docker-compose-unity\common\ComposeUnity.DaemonTests\bin\Debug\net9.0\ComposeUnity.DaemonTests.dll
+   NUnit3TestExecutor discovered 16 of 16 NUnit test cases using Current Discovery mode, Non-Explicit run
+</system-out>
+  </testsuite>
+</testsuites>
