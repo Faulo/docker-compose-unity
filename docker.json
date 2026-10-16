@@ -24,7 +24,7 @@
           }
         },
         "windows": {
-          "runner": "windows-latest",
+          "runner": "windows-2022",
           "matrix": {
             "release": {
               "tags": {

@@ -98,6 +98,8 @@ The canonical caller reads `docker.json`, which resolves the publication
 namespace and image name from the tracked `.env`. Its schema version 3 matrix
 selects the product, operating system, architecture, and Windows release;
 `OS_BASE` follows the selected release through matrix substitution.
+Windows builds retain the `windows-2022` hosted runner: the full Windows image
+exceeded available Docker storage on `windows-latest` (Server 2025).
 
 | Tag | Contents |
 | --- | --- |
