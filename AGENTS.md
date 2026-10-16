@@ -91,7 +91,7 @@ An agent may perform Git mutations only after the user explicitly opts in. Permi
 
 When Git mutations are authorized:
 
-- The user is responsible for choosing the branch. Verify the current branch and working-tree status before editing and again before creating commits.
+- Do not change the current branch unless asked. Verify the working-tree status before editing and again before creating commits.
 - Treat all unknown local changes as user work. Do not overwrite, stage, commit, restore, or otherwise alter them.
 - Keep commits small and cohesive.
 - Format agent-authored commits according to Conventional Commits 1.0.0: `<type>[optional scope]: <description>`.
@@ -111,6 +111,12 @@ Use these access methods:
 
 The three CI servers are:
 
-- `groke`: Ubuntu; runs the Jenkins controller and a Jenkins agent in the `agents_jenkins-agent` container. SSH alias and Docker context: `groke`.
-- `garl`: Ubuntu; runs a Jenkins agent in the `agents_jenkins-agent` container, connected to the controller on `groke`. SSH alias and Docker context: `garl`.
-- `dende`: Windows Server 2019; runs a Jenkins agent in the `agents_jenkins-agent` container, connected to the controller on `groke`. SSH alias and Docker context: `dende`.
+- `groke`: Ubuntu; runs the Jenkins controller and a Jenkins agent as Swarm services. SSH alias and Docker context: `groke`.
+- `garl`: Ubuntu; runs a Swarm Jenkins agent connected to the controller on `groke`. SSH alias and Docker context: `garl`.
+- `dende`: Windows Server 2019 domain controller; still runs the existing Windows Swarm Jenkins agent. SSH alias and Docker context: `dende`.
+
+`Mr. Popo` (`popo`) is Dende's Windows Server 2019 Standard Core Hyper-V VM,
+being prepared as the replacement Windows Docker worker. It is not yet a
+Docker engine or CI agent. See `docker-context/DENDE-NETWORK-PLAN.md` at the
+repository root for provisioning, storage and network status; do not assume
+Dende's workloads have already migrated.
