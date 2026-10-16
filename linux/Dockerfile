@@ -37,7 +37,7 @@ RUN set -eux; \
     case "$bootstrap_status" in 0|139) ;; *) exit "$bootstrap_status" ;; esac; \
     test -x /opt/steamcmd/linux64/steamcmd; \
     cd /opt/steamcmd; \
-    ./linux64/steamcmd +quit
+    STEAM_PLATFORM=linux64 ./steamcmd.sh +quit
 
 FROM debian:trixie-slim
 
@@ -110,8 +110,8 @@ RUN curl -fsSL "https://broth.itch.zone/butler/linux-amd64/LATEST/archive/defaul
 
 # Steam SDK
 COPY --from=steamcmd-installer /opt/steamcmd /opt/steamcmd
-RUN ln -s /opt/steamcmd/linux64/steamcmd /usr/local/bin/steamcmd && \
-    steamcmd +quit
+COPY --chmod=755 linux/commands/steamcmd /usr/local/bin/steamcmd
+RUN steamcmd +quit
 
 # PHP
 ENV PHP_VERSION=8.4
