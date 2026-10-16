@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 3,
+  "namespace": "$DOCKER_NAMESPACE",
+  "image": "$DOCKER_IMAGE",
+  "context": ".",
+  "matrix": {
+    "product": {
+      "tags": {
+        "latest": {}
+      }
+    },
+    "os": {
+      "dockerfile": "{{matrix.os}}/Dockerfile",
+      "tags": {
+        "linux": {
+          "matrix": {
+            "architecture": {
+              "tags": {
+                "amd64": {
+                  "runner": "ubuntu-latest"
+                }
+              }
+            }
+          }
+        },
+        "windows": {
+          "runner": "windows-latest",
+          "matrix": {
+            "release": {
+              "tags": {
+                "ltsc2019": {}
+              },
+              "buildArgs": {
+                "OS_BASE": "{{matrix.release}}"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

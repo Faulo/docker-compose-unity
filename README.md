@@ -90,6 +90,30 @@ The compose-unity tool stack is installed at `/compose-unity` in the Linux
 image and `C:\compose-unity` in the Windows image. Runtime-owned subdirectories,
 including the WebGL document root, live beneath these locations.
 
+## Published Images
+
+GitHub Actions builds and publishes images through
+[`Faulo/workflows-docker@v3`](https://github.com/Faulo/workflows-docker/tree/v3).
+The canonical caller reads `docker.json`, which resolves the publication
+namespace and image name from the tracked `.env`. Its schema version 3 matrix
+selects the product, operating system, architecture, and Windows release;
+`OS_BASE` follows the selected release through matrix substitution.
+
+| Tag | Contents |
+| --- | --- |
+| `faulo/compose-unity:latest` | Combined Linux amd64 and full Windows LTSC 2019 image index. |
+| `faulo/compose-unity:latest-linux` | All configured Linux images and their attestations. |
+| `faulo/compose-unity:latest-windows` | All configured full Windows images. |
+| `faulo/compose-unity:latest-linux-amd64` | Linux amd64 image and its attestations. |
+| `faulo/compose-unity:latest-windows-ltsc2019` | Full Windows LTSC 2019 amd64 image and its attestations. |
+
+Use the exact leaf tags when an exact platform or Windows release is required.
+Every matrix prefix publishes only its descendant images and attestations;
+configured aliases reference the same index digest as their primary prefix.
+The shared workflow verifies published
+digests and platform metadata and removes only its run-specific staging tags.
+Project tests run in Jenkins.
+
 ## Docker Contexts
 
 The local development setup assumes two explicitly named Docker contexts:
@@ -108,7 +132,7 @@ On Windows:
 ```yaml
 services:
   compose-unity:
-    image: faulo/compose-unity:latest
+    image: faulo/compose-unity:latest-windows-ltsc2019
     environment:
       UNITY_NO_GRAPHICS: 0
     isolation: process
@@ -121,7 +145,7 @@ On Linux:
 ```yaml
 services:
   compose-unity:
-    image: faulo/compose-unity:latest
+    image: faulo/compose-unity:latest-linux-amd64
     environment:
       UNITY_NO_GRAPHICS: 0
     gpus: all
@@ -158,6 +182,11 @@ volumes:
   - unity-cache:C:/Users/ContainerAdministrator/AppData/Local/Unity
   - unity-license:C:/ProgramData/Unity
 ```
+
+On Linux, `steamcmd` invokes Valve's launcher with `STEAM_PLATFORM=linux64`.
+The launcher restarts the client after self-updates request exit code 42,
+preserves command arguments and the caller's working directory, and returns
+the final client exit code. The public command also supports `docker exec`.
 
 `linux/machine-id` supplies a stable Linux machine identity used by the image. Changes to that file, credential forwarding, editor paths, or licensing volumes can invalidate persisted licensing and should be made deliberately.
 
@@ -235,7 +264,7 @@ on host loopback. A Linux Compose service can be configured as follows:
 ```yaml
 services:
   unity:
-    image: faulo/compose-unity:latest
+    image: faulo/compose-unity:latest-linux-amd64
     environment:
       - COMPOSE_UNITY_MCP=1
       - UNITY_CREDENTIALS_USR_FILE=/run/secrets/unity-user
@@ -291,7 +320,7 @@ Unity state paths:
 ```yaml
 services:
   unity:
-    image: faulo/compose-unity:latest
+    image: faulo/compose-unity:latest-windows-ltsc2019
     environment:
       - COMPOSE_UNITY_MCP=1
       - 'UNITY_CREDENTIALS_USR_FILE=C:\ProgramData\Docker\secrets\unity-user'
@@ -469,14 +498,23 @@ probing, argument boundaries, Docker output and exit codes, JUnit results,
 retained worker reuse, project mounts, and exclusion of the Docker endpoint
 from workers. The Windows fixture uses the official .NET 9 Nano Server 1809
 image and respects the daemon's default isolation mode, matching fleet behavior.
-The GitHub Actions Windows runner configures Hyper-V as the daemon default so
-the LTSC 2019 container can run on Windows Server 2022. CI runs the daemon-free
-suite plus Linux and Windows daemon fixtures before image builds. Full Unity
-invocation remains in the local image test scripts because editor downloads and
+Full Unity invocation remains in the local image test scripts because editor downloads and
 licensing make it unsuitable for the lightweight CI harness.
 
-Jenkins runs `dotnet test --logger junit` in the .NET 9 SDK container on a
-Linux agent and publishes `**/TestResults.xml` with its native `junit` step.
-Each test project writes its report to `TestResults/TestResults.xml`.
-Image integration tests continue to use the targets and variants configured
-in `.jenkins/pesterProject.properties`.
+Jenkins runs the unit suite and the required native daemon fixture on both
+Garl and Dende through `.jenkins/Invoke-NativeTests.ps1`. The runner uses .NET 9
+SDK containers, isolated named `linux` or `windows` Docker contexts, and shared
+absolute host paths for nested bind mounts. Linux uses host networking for the
+fixture's loopback endpoint; Dende retains its compatible LTSC 2019 process
+isolation. An unavailable matching daemon fails the run. JUnit reports under
+`.reports/` are published with Jenkins's native `junit` step.
+
+For planned Dende maintenance, explicitly enable the Jenkins parameter
+`SKIP_WINDOWS_VALIDATION` to skip its native and image tests for that run.
+It defaults to false so regular runs continue to validate both hosts.
+
+Image integration tests use the targets and variants configured in
+`.jenkins/pesterProject.properties`, including Steam login with the configured
+Steam and mailbox credentials, fresh and reused SteamCMD state, and the
+deterministic Linux restart regression. GitHub Actions runs image builds and
+publication only.
