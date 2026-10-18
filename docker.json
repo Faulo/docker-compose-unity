@@ -2,6 +2,8 @@
   "schemaVersion": 3,
   "namespace": "$DOCKER_NAMESPACE",
   "image": "$DOCKER_IMAGE",
+  "description": "Retired Unity tooling image. Use faulo/unity for Unity or faulo/ci-tools for publishing.",
+  "overviewFile": "README.md",
   "context": ".",
   "matrix": {
     "product": {
