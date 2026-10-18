@@ -1,9 +1,6 @@
 # Compose Unity for Linux and Windows containers
 
-[![Docker](https://github.com/Faulo/docker-compose-unity/actions/workflows/docker.yml/badge.svg?branch=main)](https://github.com/Faulo/docker-compose-unity/actions/workflows/docker.yml)
-[![Docker image updated](https://img.shields.io/docker/last-updated/faulo/compose-unity/latest)](https://hub.docker.com/r/faulo/compose-unity/tags?name=latest)
-[![License: MIT](https://img.shields.io/github/license/Faulo/docker-compose-unity)](LICENSE)
-[![Status: retired](https://img.shields.io/badge/status-retired-inactive)](#migration)
+[![Docker](https://github.com/Faulo/docker-compose-unity/actions/workflows/docker.yml/badge.svg?branch=main)](https://github.com/Faulo/docker-compose-unity/actions/workflows/docker.yml) [![Docker image updated](https://img.shields.io/docker/last-updated/faulo/compose-unity/latest)](https://hub.docker.com/r/faulo/compose-unity/tags?name=latest) [![License: MIT](https://img.shields.io/github/license/Faulo/docker-compose-unity)](LICENSE) [![Status: retired](https://img.shields.io/badge/status-retired-inactive)](#migration)
 
 **This project is retired.** Use
 [`faulo/unity`](https://github.com/Faulo/docker-unity) for Unity editor
