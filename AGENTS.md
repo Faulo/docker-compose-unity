@@ -40,14 +40,14 @@ When the user has authorized the required release, Git, CI, and deployment opera
 
 1. If the release is a refactor or performance improvement, skip this phase.
 2. Add or update the Pester integration coverage under `tests/` so it expresses the intended behavior.
-3. Run the new coverage against the currently published image on both Garl and Dende with `pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Pull -Context <context>`, and inspect the complete output.
+3. Run the new coverage against the currently published image on both Garl and Popo with `pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Pull -Context <context>`, and inspect the complete output.
 4. The new coverage must fail against the currently published image for the intended reason. If it passes, start this phase over with a strenghened contract.
 5. Do not proceed on an infrastructure failure or unrelated regression; establish the expected product failure first.
 
 #### Phase 2: Build and validate the candidate
 
 1. Implement the change and run the applicable local tests. Update the documentation.
-2. Build candidate images in the `tmp` namespace on Docker context `dende` for Windows and `garl` for Linux.
+2. Build candidate images in the `tmp` namespace on Docker context `popo` for Windows and `garl` for Linux.
 3. Run `pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context <context>` for both contexts and inspect the complete output.
 4. If the candidate fails, fix it, rebuild both candidate images, and repeat both integration runs.
 5. Proceed only after the complete candidate integration run passes.
@@ -56,7 +56,7 @@ When the user has authorized the required release, Git, CI, and deployment opera
 
 1. Commit and push the implementation, then watch the complete GitHub CI image build.
 2. If GitHub CI fails, fix the issue and revalidate the candidate from Phase 2 before pushing the correction.
-3. After GitHub CI passes, run this image's Jenkins job and inspect the complete console log. Jenkins pulls and tests every configured published variant on Dende and Garl.
+3. After GitHub CI passes, run this image's Jenkins job and inspect the complete console log. Jenkins pulls and tests every configured published variant on Popo and Garl.
 4. If any variant fails, fix the implementation, then test that specific variant with `pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context <context> -Variant <variant>`, then start this phase over.
 5. Publishing is complete when GitHub and Jenkins pass for all contexts and variants.
 5. If the feature was based on a ticket, update the ticket's body to reflect the shipped design and mark it complete.
@@ -70,10 +70,8 @@ If the expected behavior or its test contract changes at any point, restart at P
 These short messages have special handling when they appear alone in a user message:
 
 - `ping`: Reply with `pong`.
-- `.`: Reply with `.`.
 - `?`: Continue the previous response or task after an interruption.
 - `ticket <URI>`: Read the linked ticket and all comments through the available integration. Inspect the project, reproduce the current behavior, and run relevant checks as needed. Then explain the request, project context, reproducibility, risks, and a proposed implementation plan. Do not edit files, change remote state, commit, or push until the user approves the approach.
-- `can you <x>?` is a question about your knowledge, capabilities or permissions. It is not an instruction to perform `x`.
 
 ### Compatibility
 
@@ -109,14 +107,9 @@ Use these access methods:
 - `ssh <host>` opens that server's shell.
 - `docker --context <host> ...` talks to that server's Docker daemon. Always name the context explicitly.
 
-The three CI servers are:
+The CI servers are:
 
-- `groke`: Ubuntu; runs the Jenkins controller and a Jenkins agent as Swarm services. SSH alias and Docker context: `groke`.
-- `garl`: Ubuntu; runs a Swarm Jenkins agent connected to the controller on `groke`. SSH alias and Docker context: `garl`.
-- `dende`: Windows Server 2019 domain controller; still runs the existing Windows Swarm Jenkins agent. SSH alias and Docker context: `dende`.
-
-`Mr. Popo` (`popo`) is Dende's Windows Server 2019 Standard Core Hyper-V VM,
-being prepared as the replacement Windows Docker worker. It is not yet a
-Docker engine or CI agent. See `docker-context/DENDE-NETWORK-PLAN.md` at the
-repository root for provisioning, storage and network status; do not assume
-Dende's workloads have already migrated.
+- `groke`: Mörkö, Ubuntu; Jenkins controller and Swarm manager. SSH alias and Docker context: `groke`.
+- `garl`: Garl, Ubuntu; Jenkins agent and Swarm worker for `groke`. SSH alias and Docker context: `garl`.
+- `dende`: Dende, Windows Server 2019; domain controller and Hyper-V host for `popo`. SSH alias and Docker context: `dende`.
+- `popo`: Mr. Popo, Windows Server 2019 Standard Core VM on `dende`; Jenkins agent and Swarm worker for `groke`. SSH alias and Docker context: `popo`.

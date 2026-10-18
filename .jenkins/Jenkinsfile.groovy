@@ -1,11 +1,6 @@
 pipeline {
     agent none
 
-    parameters {
-        booleanParam(name: 'SKIP_WINDOWS_VALIDATION', defaultValue: false,
-            description: 'Skip Dende native and image tests during Windows host maintenance.')
-    }
-
     options {
         disableConcurrentBuilds()
         disableResume()
@@ -13,6 +8,22 @@ pipeline {
     }
 
     stages {
+        stage('Unit Tests') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/dotnet/sdk:9.0'
+                    label 'docker && linux'
+                }
+            }
+            steps {
+                exec 'dotnet test --logger junit'
+            }
+            post {
+                always {
+                    junit(testResults: '**/TestResults.xml', allowEmptyResults: false)
+                }
+            }
+        }
         stage('Integration Tests') {
             steps {
                 script {
@@ -90,10 +101,6 @@ def pesterProject(config) {
     }
 
     for (def target in targets) {
-        if (target.equalsIgnoreCase('Dende') && params.SKIP_WINDOWS_VALIDATION) {
-            echo "Skipping ${target}: Windows validation explicitly disabled for maintenance"
-            continue
-        }
         stage("Host: ${target}") {
             node(target) {
                 def os = isWindows() ? 'windows' : 'linux'
@@ -102,14 +109,6 @@ def pesterProject(config) {
 
                 dir('.reports') {
                     deleteDir()
-                }
-
-                stage("Native tests: ${target}") {
-                    try {
-                        exec "pwsh -NoLogo -NoProfile -NonInteractive -File .jenkins/Invoke-NativeTests.ps1 -Os ${os}"
-                    } finally {
-                        junit(testResults: '.reports/**/TestResults.xml', allowEmptyResults: false)
-                    }
                 }
 
                 withEnvFile {
